@@ -98,6 +98,7 @@ A subdirectory is considered a project when it contains at least one of the foll
 
 - a `.git` directory;
 - a Python file (`*.py`);
+- a Windows script file (`*.ps1`, `*.vbs`, `*.bat`, or `*.cmd`);
 - a README file (`README*`).
 
 Hidden directories are ignored during project discovery.

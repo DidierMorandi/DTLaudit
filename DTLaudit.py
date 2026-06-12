@@ -14,15 +14,20 @@ import os
 import shutil
 import subprocess
 import sys
-import textwrap
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 
-VERSION = "v1.0-1"
-DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent
+def application_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+VERSION = "v1.0-3"
+DEFAULT_OUTPUT_DIR = application_dir()
 DEFAULT_JSON_REPORT = "DTLaudit_rapport.json"
 DEFAULT_TXT_REPORT = "DTLaudit_rapport.txt"
 DEFAULT_HTML_REPORT = "DTLaudit_rapport.html"
@@ -30,6 +35,28 @@ GENERATED_DIRS = {"build", "dist", "__pycache__", ".pytest_cache", ".mypy_cache"
 LOCAL_DIRS = {"logs", "tmp", "temp"}
 TEMP_SUFFIXES = {".tmp", ".bak", ".old", ".log", ".pyc", ".pyo"}
 LARGE_FILE_BYTES = 5 * 1024 * 1024
+PROJECT_FILE_PATTERNS = (
+    "*.py",
+    "*.ps1",
+    "*.vbs",
+    "*.bat",
+    "*.cmd",
+    "README*",
+)
+SCAN_STATUS_MESSAGE = "%DTLaudit-I-Scan, scanning folder(s)..."
+
+
+def subprocess_window_options() -> dict[str, Any]:
+    if os.name != "nt":
+        return {}
+
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    startupinfo.wShowWindow = 0
+    return {
+        "creationflags": subprocess.CREATE_NO_WINDOW,
+        "startupinfo": startupinfo,
+    }
 
 
 @dataclass
@@ -84,6 +111,7 @@ def run_command(args: list[str], cwd: Path, timeout: int = 12) -> tuple[int, str
             stderr=subprocess.DEVNULL,
             timeout=timeout,
             check=False,
+            **subprocess_window_options(),
         )
     except (OSError, subprocess.TimeoutExpired):
         return 1, ""
@@ -106,7 +134,9 @@ def discover_projects(suite_root: Path) -> list[Path]:
             continue
         try:
             has_git = (child / ".git").exists()
-            has_project_files = any(child.glob("*.py")) or any(child.glob("README*"))
+            has_project_files = any(
+                any(child.glob(pattern)) for pattern in PROJECT_FILE_PATTERNS
+            )
         except OSError:
             continue
         if has_git or has_project_files:
@@ -577,6 +607,65 @@ def print_if_available(message: str, stream: Any | None = None, end: str = "\n")
     print(message, file=target, end=end)
 
 
+class ScanStatusLine:
+    def __init__(self, message: str = SCAN_STATUS_MESSAGE) -> None:
+        self.root = None
+        self.label = None
+        try:
+            import tkinter as tk
+
+            root = tk.Tk()
+            root.overrideredirect(True)
+            root.attributes("-topmost", True)
+            root.configure(bg="#1f2937")
+
+            label = tk.Label(
+                root,
+                text=message,
+                anchor="w",
+                bg="#1f2937",
+                fg="#ffffff",
+                padx=14,
+                pady=5,
+                font=("Consolas", 10),
+            )
+            label.pack(fill="both", expand=True)
+
+            root.update_idletasks()
+            width = root.winfo_screenwidth()
+            height = 30
+            y = max(0, root.winfo_screenheight() - height - 48)
+            root.geometry(f"{width}x{height}+0+{y}")
+            root.update()
+
+            self.root = root
+            self.label = label
+        except Exception:
+            self.root = None
+            self.label = None
+
+    def update(self, message: str = SCAN_STATUS_MESSAGE) -> None:
+        if self.root is None or self.label is None:
+            return
+        try:
+            self.label.configure(text=message)
+            self.root.update_idletasks()
+            self.root.update()
+        except Exception:
+            self.close()
+
+    def close(self) -> None:
+        if self.root is None:
+            return
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+        finally:
+            self.root = None
+            self.label = None
+
+
 def output_path(value: str, root: Path) -> Path:
     path = Path(value)
     if path.is_absolute():
@@ -628,20 +717,123 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def show_missing_parameters_dialog() -> None:
-    message = textwrap.dedent(
-        f"""\
-        DTLaudit {VERSION}
+def ask_user_for_target() -> argparse.Namespace | None:
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        from tkinter import messagebox
+        from tkinter import ttk
 
-        Cet outil doit etre lance avec un dossier a auditer.
+        root = tk.Tk()
+        root.title(f"DTLaudit {VERSION}")
+        root.resizable(False, False)
+        root.attributes("-topmost", True)
+        root.result = None
 
-        Exemples :
-          DTLaudit.exe --suite "C:\\chemin\\vers\\outils"
-          DTLaudit.exe --project "C:\\chemin\\vers\\un-projet"
+        mode = tk.StringVar(value="suite")
+        selected_path = tk.StringVar(value="")
 
-        Astuce : utilisez un raccourci Windows qui ajoute --suite ou --project dans la cible.
-        """
-    )
+        def choose_folder() -> None:
+            title = (
+                "Choisir le dossier contenant les projets"
+                if mode.get() == "suite"
+                else "Choisir le dossier du projet"
+            )
+            folder = filedialog.askdirectory(parent=root, title=title)
+            if folder:
+                selected_path.set(folder)
+                start_button.state(["!disabled"])
+
+        def start_audit() -> None:
+            path = selected_path.get().strip()
+            if not path:
+                messagebox.showwarning(
+                    "Dossier manquant",
+                    "Choisissez d’abord le dossier à auditer.",
+                    parent=root,
+                )
+                return
+            root.result = argparse.Namespace(
+                project=path if mode.get() == "project" else None,
+                suite=path if mode.get() == "suite" else None,
+                json=None,
+                text=None,
+                html=None,
+                no_github=False,
+                opened_from_window=True,
+            )
+            root.destroy()
+
+        def cancel() -> None:
+            root.result = None
+            root.destroy()
+
+        frame = ttk.Frame(root, padding=24)
+        frame.grid(row=0, column=0, sticky="nsew")
+
+        title = ttk.Label(
+            frame,
+            text="Que voulez-vous auditer ?",
+            font=("Segoe UI", 14, "bold"),
+        )
+        title.grid(row=0, column=0, columnspan=2, sticky="w")
+
+        intro = ttk.Label(
+            frame,
+            text="DTLaudit va générer un rapport HTML sans modifier vos fichiers.",
+        )
+        intro.grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 18))
+
+        ttk.Radiobutton(
+            frame,
+            text="Un dossier contenant plusieurs projets",
+            variable=mode,
+            value="suite",
+        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=2)
+        ttk.Radiobutton(
+            frame,
+            text="Un seul projet",
+            variable=mode,
+            value="project",
+        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=2)
+
+        ttk.Entry(frame, textvariable=selected_path, width=58).grid(
+            row=4,
+            column=0,
+            sticky="ew",
+            pady=(18, 0),
+        )
+        ttk.Button(frame, text="Choisir...", command=choose_folder).grid(
+            row=4,
+            column=1,
+            padx=(8, 0),
+            pady=(18, 0),
+        )
+
+        buttons = ttk.Frame(frame)
+        buttons.grid(row=5, column=0, columnspan=2, sticky="e", pady=(22, 0))
+        ttk.Button(buttons, text="Annuler", command=cancel).grid(row=0, column=0)
+        start_button = ttk.Button(buttons, text="Lancer l’audit", command=start_audit)
+        start_button.grid(row=0, column=1, padx=(8, 0))
+        start_button.state(["disabled"])
+
+        root.bind("<Escape>", lambda event: cancel())
+        root.protocol("WM_DELETE_WINDOW", cancel)
+        root.update_idletasks()
+        x = (root.winfo_screenwidth() - root.winfo_width()) // 2
+        y = (root.winfo_screenheight() - root.winfo_height()) // 3
+        root.geometry(f"+{x}+{y}")
+        root.mainloop()
+        return root.result
+    except Exception:
+        print_if_available(
+            "DTLaudit doit etre lance avec --suite ou --project.",
+            sys.stderr,
+        )
+        return None
+
+
+def show_report_ready_dialog(report_path: Path) -> None:
     try:
         import tkinter as tk
         from tkinter import messagebox
@@ -649,29 +841,54 @@ def show_missing_parameters_dialog() -> None:
         root = tk.Tk()
         root.withdraw()
         root.attributes("-topmost", True)
-        messagebox.showwarning("DTLaudit - dossier requis", message, parent=root)
+        open_report = messagebox.askyesno(
+            "DTLaudit - rapport créé",
+            f"Le rapport est prêt :\n\n{report_path}\n\nVoulez-vous l’ouvrir maintenant ?",
+            parent=root,
+        )
         root.destroy()
+        if open_report:
+            os.startfile(report_path)
     except Exception:
-        print_if_available(message, sys.stderr)
+        print_if_available(f"Rapport HTML écrit : {report_path}", sys.stderr)
 
 
 def main() -> int:
+    status_line = None
     if len(sys.argv) == 1:
-        show_missing_parameters_dialog()
-        return 2
-
-    args = parse_args()
+        args = ask_user_for_target()
+        if args is None:
+            return 2
+    else:
+        args = parse_args()
+        args.opened_from_window = False
     github_enabled = not args.no_github
     html_output = args.html or DEFAULT_HTML_REPORT
+
+    if args.opened_from_window:
+        status_line = ScanStatusLine()
 
     if args.project:
         root = Path(args.project).resolve()
         project_paths = [root]
     else:
         root = Path(args.suite).resolve()
+        if status_line is not None:
+            status_line.update(f"{SCAN_STATUS_MESSAGE} discovering projects")
         project_paths = discover_projects(root)
 
-    projects = [scan_project(path, github_enabled) for path in project_paths]
+    projects = []
+    try:
+        for index, path in enumerate(project_paths, start=1):
+            if status_line is not None:
+                status_line.update(
+                    f"{SCAN_STATUS_MESSAGE} ({index}/{len(project_paths)}) {path.name}"
+                )
+            projects.append(scan_project(path, github_enabled))
+    finally:
+        if status_line is not None:
+            status_line.close()
+
     serialized_report = serialize(projects, root)
 
     text_report = None
@@ -695,6 +912,8 @@ def main() -> int:
         html_path = output_path(html_output, DEFAULT_OUTPUT_DIR)
         write_text_file(html_path, build_html_report(projects, root))
         print_if_available(f"Rapport HTML écrit : {html_path}", sys.stderr)
+        if args.opened_from_window:
+            show_report_ready_dialog(html_path)
 
     print_if_available(
         text_report if text_report is not None else build_text_report(projects, root),

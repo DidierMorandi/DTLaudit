@@ -20,6 +20,7 @@
 imports:
     <a href="#__future__">__future__</a>
  &#8226;   <a href="#_collections_abc">_collections_abc</a>
+ &#8226;   <a href="#_tkinter">_tkinter</a>
  &#8226;   <a href="#_weakrefset">_weakrefset</a>
  &#8226;   <a href="#abc">abc</a>
  &#8226;   <a href="#argparse">argparse</a>
@@ -181,9 +182,10 @@ imports:
  &#8226;   <a href="#stat">stat</a>
  &#8226;   <a href="#subprocess">subprocess</a>
  &#8226;   <a href="#sys">sys</a>
- &#8226;   <a href="#textwrap">textwrap</a>
  &#8226;   <a href="#tkinter">tkinter</a>
+ &#8226;   <a href="#tkinter.filedialog">tkinter.filedialog</a>
  &#8226;   <a href="#tkinter.messagebox">tkinter.messagebox</a>
+ &#8226;   <a href="#tkinter.ttk">tkinter.ttk</a>
  &#8226;   <a href="#traceback">traceback</a>
  &#8226;   <a href="#types">types</a>
  &#8226;   <a href="#typing">typing</a>
@@ -1072,7 +1074,8 @@ imported by:
   <a name="_tkinter"></a>
   <tt>_tkinter</tt> <span class="moduletype"><tt>C:\Users\Utilisateur\AppData\Local\Python\pythoncore-3.14-64\DLLs\_tkinter.pyd</tt></span>  <div class="import">
 imported by:
-    <a href="#tkinter">tkinter</a>
+    <a href="#DTLaudit.py">DTLaudit.py</a>
+ &#8226;   <a href="#tkinter">tkinter</a>
 
   </div>
 
@@ -5084,6 +5087,7 @@ imports:
 imported by:
     <a href="#glob">glob</a>
  &#8226;   <a href="#shutil">shutil</a>
+ &#8226;   <a href="#tkinter.filedialog">tkinter.filedialog</a>
  &#8226;   <a href="#tracemalloc">tracemalloc</a>
  &#8226;   <a href="#urllib.request">urllib.request</a>
 
@@ -6286,6 +6290,7 @@ imported by:
  &#8226;   <a href="#calendar">calendar</a>
  &#8226;   <a href="#gettext">gettext</a>
  &#8226;   <a href="#subprocess">subprocess</a>
+ &#8226;   <a href="#tkinter.filedialog">tkinter.filedialog</a>
 
   </div>
 
@@ -6594,6 +6599,7 @@ imported by:
  &#8226;   <a href="#tempfile">tempfile</a>
  &#8226;   <a href="#threading">threading</a>
  &#8226;   <a href="#tkinter">tkinter</a>
+ &#8226;   <a href="#tkinter.filedialog">tkinter.filedialog</a>
  &#8226;   <a href="#urllib.request">urllib.request</a>
  &#8226;   <a href="#zipfile">zipfile</a>
  &#8226;   <a href="#zipfile._path.glob">zipfile._path.glob</a>
@@ -7582,8 +7588,7 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#DTLaudit.py">DTLaudit.py</a>
- &#8226;   <a href="#argparse">argparse</a>
+    <a href="#argparse">argparse</a>
  &#8226;   <a href="#importlib.metadata">importlib.metadata</a>
  &#8226;   <a href="#importlib.metadata._adapters">importlib.metadata._adapters</a>
  &#8226;   <a href="#traceback">traceback</a>
@@ -7667,8 +7672,11 @@ imports:
  &#8226;   <a href="#os">os</a>
  &#8226;   <a href="#re">re</a>
  &#8226;   <a href="#sys">sys</a>
+ &#8226;   <a href="#tkinter.commondialog">tkinter.commondialog</a>
  &#8226;   <a href="#tkinter.constants">tkinter.constants</a>
+ &#8226;   <a href="#tkinter.filedialog">tkinter.filedialog</a>
  &#8226;   <a href="#tkinter.messagebox">tkinter.messagebox</a>
+ &#8226;   <a href="#tkinter.ttk">tkinter.ttk</a>
  &#8226;   <a href="#traceback">traceback</a>
  &#8226;   <a href="#types">types</a>
  &#8226;   <a href="#warnings">warnings</a>
@@ -7679,7 +7687,11 @@ imported by:
     <a href="#DTLaudit.py">DTLaudit.py</a>
  &#8226;   <a href="#tkinter.commondialog">tkinter.commondialog</a>
  &#8226;   <a href="#tkinter.constants">tkinter.constants</a>
+ &#8226;   <a href="#tkinter.dialog">tkinter.dialog</a>
+ &#8226;   <a href="#tkinter.filedialog">tkinter.filedialog</a>
  &#8226;   <a href="#tkinter.messagebox">tkinter.messagebox</a>
+ &#8226;   <a href="#tkinter.simpledialog">tkinter.simpledialog</a>
+ &#8226;   <a href="#tkinter.ttk">tkinter.ttk</a>
 
   </div>
 
@@ -7695,7 +7707,9 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#tkinter.messagebox">tkinter.messagebox</a>
+    <a href="#tkinter">tkinter</a>
+ &#8226;   <a href="#tkinter.filedialog">tkinter.filedialog</a>
+ &#8226;   <a href="#tkinter.messagebox">tkinter.messagebox</a>
 
   </div>
 
@@ -7718,12 +7732,86 @@ imported by:
 </div>
 
 <div class="node">
+  <a name="tkinter.dialog"></a>
+  <a target="code" href="///C:/Users/Utilisateur/AppData/Local/Python/pythoncore-3.14-64/Lib/tkinter/dialog.py" type="text/plain"><tt>tkinter.dialog</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#tkinter">tkinter</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#tkinter.filedialog">tkinter.filedialog</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="tkinter.filedialog"></a>
+  <a target="code" href="///C:/Users/Utilisateur/AppData/Local/Python/pythoncore-3.14-64/Lib/tkinter/filedialog.py" type="text/plain"><tt>tkinter.filedialog</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#fnmatch">fnmatch</a>
+ &#8226;   <a href="#locale">locale</a>
+ &#8226;   <a href="#os">os</a>
+ &#8226;   <a href="#tkinter">tkinter</a>
+ &#8226;   <a href="#tkinter.commondialog">tkinter.commondialog</a>
+ &#8226;   <a href="#tkinter.dialog">tkinter.dialog</a>
+ &#8226;   <a href="#tkinter.simpledialog">tkinter.simpledialog</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#DTLaudit.py">DTLaudit.py</a>
+ &#8226;   <a href="#tkinter">tkinter</a>
+
+  </div>
+
+</div>
+
+<div class="node">
   <a name="tkinter.messagebox"></a>
   <a target="code" href="///C:/Users/Utilisateur/AppData/Local/Python/pythoncore-3.14-64/Lib/tkinter/messagebox.py" type="text/plain"><tt>tkinter.messagebox</tt></a>
 <span class="moduletype">SourceModule</span>  <div class="import">
 imports:
     <a href="#tkinter">tkinter</a>
  &#8226;   <a href="#tkinter.commondialog">tkinter.commondialog</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#DTLaudit.py">DTLaudit.py</a>
+ &#8226;   <a href="#tkinter">tkinter</a>
+ &#8226;   <a href="#tkinter.simpledialog">tkinter.simpledialog</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="tkinter.simpledialog"></a>
+  <a target="code" href="///C:/Users/Utilisateur/AppData/Local/Python/pythoncore-3.14-64/Lib/tkinter/simpledialog.py" type="text/plain"><tt>tkinter.simpledialog</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#tkinter">tkinter</a>
+ &#8226;   <a href="#tkinter.messagebox">tkinter.messagebox</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#tkinter.filedialog">tkinter.filedialog</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="tkinter.ttk"></a>
+  <a target="code" href="///C:/Users/Utilisateur/AppData/Local/Python/pythoncore-3.14-64/Lib/tkinter/ttk.py" type="text/plain"><tt>tkinter.ttk</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#tkinter">tkinter</a>
 
   </div>
   <div class="import">
