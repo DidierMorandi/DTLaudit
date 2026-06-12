@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""DTLaudit 1.0.0 - rapport comparatif en lecture seule."""
+"""DTLaudit - rapport comparatif en lecture seule."""
 
 from __future__ import annotations
 
@@ -14,13 +14,14 @@ import os
 import shutil
 import subprocess
 import sys
+import textwrap
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 
-VERSION = "1.0.0"
+VERSION = "v1.0-1"
 DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent
 DEFAULT_JSON_REPORT = "DTLaudit_rapport.json"
 DEFAULT_TXT_REPORT = "DTLaudit_rapport.txt"
@@ -569,6 +570,13 @@ def write_text_file(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def print_if_available(message: str, stream: Any | None = None, end: str = "\n") -> None:
+    target = stream if stream is not None else sys.stdout
+    if target is None:
+        return
+    print(message, file=target, end=end)
+
+
 def output_path(value: str, root: Path) -> Path:
     path = Path(value)
     if path.is_absolute():
@@ -588,7 +596,7 @@ def serialize(projects: list[ProjectReport], root: Path) -> dict[str, Any]:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="DTLaudit 1.0.0")
+    parser = argparse.ArgumentParser(description=f"DTLaudit {VERSION}")
     target = parser.add_mutually_exclusive_group(required=True)
     target.add_argument("--project", help="Projet local à scanner")
     target.add_argument("--suite", help="Répertoire contenant plusieurs projets")
@@ -620,7 +628,38 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def show_missing_parameters_dialog() -> None:
+    message = textwrap.dedent(
+        f"""\
+        DTLaudit {VERSION}
+
+        Cet outil doit etre lance avec un dossier a auditer.
+
+        Exemples :
+          DTLaudit.exe --suite "C:\\chemin\\vers\\outils"
+          DTLaudit.exe --project "C:\\chemin\\vers\\un-projet"
+
+        Astuce : utilisez un raccourci Windows qui ajoute --suite ou --project dans la cible.
+        """
+    )
+    try:
+        import tkinter as tk
+        from tkinter import messagebox
+
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        messagebox.showwarning("DTLaudit - dossier requis", message, parent=root)
+        root.destroy()
+    except Exception:
+        print_if_available(message, sys.stderr)
+
+
 def main() -> int:
+    if len(sys.argv) == 1:
+        show_missing_parameters_dialog()
+        return 2
+
     args = parse_args()
     github_enabled = not args.no_github
     html_output = args.html or DEFAULT_HTML_REPORT
@@ -645,19 +684,22 @@ def main() -> int:
             json_path,
             json.dumps(serialized_report, ensure_ascii=False, indent=2),
         )
-        print(f"Rapport JSON écrit : {json_path}", file=sys.stderr)
+        print_if_available(f"Rapport JSON écrit : {json_path}", sys.stderr)
 
     if args.text:
         txt_path = output_path(args.text, DEFAULT_OUTPUT_DIR)
         write_text_file(txt_path, text_report or build_text_report(projects, root))
-        print(f"Rapport TXT écrit : {txt_path}", file=sys.stderr)
+        print_if_available(f"Rapport TXT écrit : {txt_path}", sys.stderr)
 
     if html_output:
         html_path = output_path(html_output, DEFAULT_OUTPUT_DIR)
         write_text_file(html_path, build_html_report(projects, root))
-        print(f"Rapport HTML écrit : {html_path}", file=sys.stderr)
+        print_if_available(f"Rapport HTML écrit : {html_path}", sys.stderr)
 
-    print(text_report if text_report is not None else build_text_report(projects, root), end="")
+    print_if_available(
+        text_report if text_report is not None else build_text_report(projects, root),
+        end="",
+    )
     return 0
 
 
