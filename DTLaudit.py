@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""DTLaudit - rapport comparatif en lecture seule."""
+"""DTLaudit - rapport comparatif en lecture seule.
+
+Compilation PyInstaller (pas de fenêtre console) :
+    pyinstaller --onefile --noconsole DTLaudit.py
+"""
 
 from __future__ import annotations
 
@@ -11,6 +15,7 @@ import html
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -26,11 +31,12 @@ def application_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
-VERSION = "v1.0-3"
+VERSION = "v1.0-9"
 DEFAULT_OUTPUT_DIR = application_dir()
 DEFAULT_JSON_REPORT = "DTLaudit_rapport.json"
 DEFAULT_TXT_REPORT = "DTLaudit_rapport.txt"
 DEFAULT_HTML_REPORT = "DTLaudit_rapport.html"
+XAMPP_JSON_DIR = Path(r"C:\xampp\htdocs\DTLaudit")
 GENERATED_DIRS = {"build", "dist", "__pycache__", ".pytest_cache", ".mypy_cache"}
 LOCAL_DIRS = {"logs", "tmp", "temp"}
 TEMP_SUFFIXES = {".tmp", ".bak", ".old", ".log", ".pyc", ".pyo"}
@@ -84,6 +90,31 @@ class GitHubInfo:
     note: str | None = None
 
 
+# Patterns de suffixes attendus pour le contrôle normatif documentaire.
+# La détection est insensible à la casse et basée sur les suffixes de noms de fichiers
+# afin de gérer le préfixe variable selon le projet (ex. DTLknowsWhy_Manuel_de_reference.html).
+DOC_NORM_ITEMS: list[tuple[str, str]] = [
+    ("manuel_ref_fr", "_Manuel_de_reference.html"),
+    ("guide_user_fr", "_Guide_Utilisateur.html"),
+    ("ref_manual_en", "_Reference_Manual.html"),
+    ("user_guide_en", "_User_Guide.html"),
+]
+
+
+@dataclass
+class DocAudit:
+    manuel_ref_fr: bool = False
+    guide_user_fr: bool = False
+    ref_manual_en: bool = False
+    user_guide_en: bool = False
+
+    def all_present(self) -> bool:
+        return all(getattr(self, key) for key, _ in DOC_NORM_ITEMS)
+
+    def count_present(self) -> int:
+        return sum(1 for key, _ in DOC_NORM_ITEMS if getattr(self, key))
+
+
 @dataclass
 class FileEntry:
     path: str
@@ -96,9 +127,11 @@ class FileEntry:
 class ProjectReport:
     name: str
     path: str
+    tool_version: str | None = None
     files: list[FileEntry] = field(default_factory=list)
     git: GitInfo = field(default_factory=GitInfo)
     github: GitHubInfo = field(default_factory=GitHubInfo)
+    doc_audit: DocAudit = field(default_factory=DocAudit)
 
 
 def run_command(args: list[str], cwd: Path, timeout: int = 12) -> tuple[int, str]:
@@ -291,14 +324,75 @@ def collect_github(project: Path, git: GitInfo, enabled: bool) -> GitHubInfo:
     return info
 
 
+def collect_doc_audit(project: Path, files: list[FileEntry]) -> DocAudit:
+    """Vérifie la présence des 4 documents normatifs attendus.
+
+    Les fichiers HTML sont cherchés dans l'ensemble de l'arborescence du projet
+    par correspondance de suffixe insensible à la casse.
+    Exemple : DTLknowsWhy_Manuel_de_reference.html satisfait le suffixe _Manuel_de_reference.html.
+    """
+    audit = DocAudit()
+    file_paths_lower = [entry.path.lower() for entry in files if entry.kind == "file"]
+
+    suffixes = {
+        "manuel_ref_fr": "_manuel_de_reference.html",
+        "guide_user_fr": "_guide_utilisateur.html",
+        "ref_manual_en": "_reference_manual.html",
+        "user_guide_en": "_user_guide.html",
+    }
+    for key, suffix in suffixes.items():
+        for p in file_paths_lower:
+            if p.endswith(suffix):
+                setattr(audit, key, True)
+                break
+
+    return audit
+
+
+def collect_project_version(project: Path) -> str | None:
+    version_file = project / ".dtl_version"
+    if version_file.is_file():
+        try:
+            data = json.loads(version_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            data = {}
+
+        display_version = data.get("display_version")
+        if isinstance(display_version, str) and display_version.strip():
+            return display_version.strip()
+
+        version = data.get("version")
+        if isinstance(version, str) and version.strip():
+            return version.strip()
+
+    candidate_files = [project / f"{project.name}.py"]
+    candidate_files.extend(sorted(project.glob("*.py"), key=lambda item: item.name.lower()))
+
+    for candidate in candidate_files:
+        if not candidate.is_file():
+            continue
+        try:
+            content = candidate.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        match = re.search(r'^\s*VERSION\s*=\s*[\'"]([^\'"]+)[\'"]', content, re.MULTILINE)
+        if match:
+            return match.group(1).strip()
+
+    return None
+
+
 def scan_project(project: Path, github_enabled: bool) -> ProjectReport:
     git = collect_git(project)
+    files = collect_files(project)
     return ProjectReport(
         name=project.name,
         path=str(project),
-        files=collect_files(project),
+        tool_version=collect_project_version(project),
+        files=files,
         git=git,
         github=collect_github(project, git, github_enabled),
+        doc_audit=collect_doc_audit(project, files),
     )
 
 
@@ -323,11 +417,28 @@ def project_count_label(count: int) -> str:
 
 
 def project_has_readme(project: ProjectReport) -> bool:
-    return any(entry.path.lower().startswith("readme") for entry in project.files)
+    readme_files = {
+        "readme.md",
+        "readme_fr.md",
+        "readme_en.md",
+    }
 
-
+    return any(
+        entry.path.lower() in readme_files
+        for entry in project.files
+    )
+ 
 def oui_non(value: bool) -> str:
     return "Oui" if value else "Non"
+
+
+def visibility_label(value: str | None) -> str:
+    normalized = (value or "").strip().lower()
+    if normalized == "public":
+        return "public"
+    if normalized in {"private", "internal"}:
+        return "privé"
+    return "-"
 
 
 def print_summary_table(projects: list[ProjectReport]) -> None:
@@ -335,17 +446,23 @@ def print_summary_table(projects: list[ProjectReport]) -> None:
     for project in sorted(projects, key=lambda item: item.name.lower()):
         rows.append(
             {
-                "Projet": project.name,
-                "Git": oui_non(project.git.present),
-                "GitHub": oui_non(project.git.remote_github or project.github.available),
-                "README": oui_non(project_has_readme(project)),
-                "Release": oui_non(bool(project.github.latest_release)),
-                "Branche": project.git.branch or "-",
-                "Modifs": str(project.git.changed_files or 0),
+                "Projet":   project.name,
+                "Version":  project.tool_version or "-",
+                "Git":      oui_non(project.git.present),
+                "GitHub":   oui_non(project.git.remote_github or project.github.available),
+                "Visib.":   visibility_label(project.github.visibility),
+                "README":   oui_non(project_has_readme(project)),
+                "RF Fr":    oui_non(project.doc_audit.manuel_ref_fr),
+                "UG Fr":    oui_non(project.doc_audit.guide_user_fr),
+                "RF En":    oui_non(project.doc_audit.ref_manual_en),
+                "UG En":    oui_non(project.doc_audit.user_guide_en),
+                "Release":  oui_non(bool(project.github.latest_release)),
+                "Branche":  project.git.branch or "-",
+                "Modifs":   str(project.git.changed_files or 0),
             }
         )
 
-    columns = ["Projet", "Git", "GitHub", "README", "Release", "Branche", "Modifs"]
+    columns = ["Projet", "Version", "Git", "GitHub", "Visib.", "README", "RF Fr", "UG Fr", "RF En", "UG En", "Release", "Branche", "Modifs"]
     widths = {
         column: max(len(column), *(len(row[column]) for row in rows)) if rows else len(column)
         for column in columns
@@ -363,8 +480,22 @@ def print_summary_table(projects: list[ProjectReport]) -> None:
 def print_project_block(project: ProjectReport) -> None:
     print(project.name)
     print("-" * len(project.name))
+    print("Version :")
+    print(f"    {project.tool_version or 'non détectée'}")
     print("README :")
     print(f"    {present_absent(project_has_readme(project))}")
+    print("Documentation normative :")
+    doc_labels = {
+        "manuel_ref_fr": "Manuel de référence (FR)",
+        "guide_user_fr": "Guide utilisateur (FR)",
+        "ref_manual_en": "Reference Manual (EN)",
+        "user_guide_en": "User Guide (EN)",
+    }
+    for key, label in doc_labels.items():
+        status = present_absent(getattr(project.doc_audit, key))
+        print(f"    {label} : {status}")
+    complete = "complète" if project.doc_audit.all_present() else f"{project.doc_audit.count_present()}/{len(DOC_NORM_ITEMS)} présents"
+    print(f"    Bilan : {complete}")
     print("Git :")
     print(f"    {present_absent(project.git.present)}")
     if project.git.present:
@@ -401,6 +532,24 @@ def notable_observations(projects: list[ProjectReport]) -> list[str]:
     observations.append(
         f"README est présent dans {project_count_label(readme_count)} sur {total}."
     )
+
+    # Contrôle normatif documentation
+    full_doc_count = count_projects(lambda project: project.doc_audit.all_present())
+    observations.append(
+        f"Documentation normative complète (4/4) dans {project_count_label(full_doc_count)} sur {total}."
+    )
+    doc_labels = {
+        "manuel_ref_fr": "Manuel de référence (FR)",
+        "guide_user_fr": "Guide utilisateur (FR)",
+        "ref_manual_en": "Reference Manual (EN)",
+        "user_guide_en": "User Guide (EN)",
+    }
+    for key, label in doc_labels.items():
+        missing = [p.name for p in projects if not getattr(p.doc_audit, key)]
+        if missing:
+            observations.append(
+                f"{label} manquant dans : {', '.join(missing)}."
+            )
 
     git_count = count_projects(lambda project: project.git.present)
     observations.append(
@@ -538,58 +687,418 @@ def build_text_report(projects: list[ProjectReport], root: Path) -> str:
     return buffer.getvalue()
 
 
+def _h(value: str) -> str:
+    """Raccourci html.escape."""
+    return html.escape(value)
+
+
+def _yn_cell(value: bool, css_class: str = "") -> str:
+    """Cellule <td> Oui/Non colorée."""
+    class_suffix = f" {css_class}" if css_class else ""
+    if value:
+        return f'<td class="yn-yes{class_suffix}">Oui</td>'
+    return f'<td class="yn-no{class_suffix}">Non</td>'
+
+
+def _html_summary_table(projects: list[ProjectReport]) -> str:
+    rows = []
+    for project in sorted(projects, key=lambda p: p.name.lower()):
+        g = project.git
+        gh = project.github
+        da = project.doc_audit
+        rows.append(
+            f"<tr>"
+            f"<td class='project-name'>{_h(project.name)}</td>"
+            f"<td class='tool-version'>{_h(project.tool_version or '-')}</td>"
+            f"{_yn_cell(g.present)}"
+            f"{_yn_cell(bool(g.remote_github or gh.available), 'github-cell')}"
+            f"<td class='visibility'>{_h(visibility_label(gh.visibility))}</td>"
+            f"{_yn_cell(project_has_readme(project))}"
+            f"{_yn_cell(da.manuel_ref_fr)}"
+            f"{_yn_cell(da.guide_user_fr)}"
+            f"{_yn_cell(da.ref_manual_en)}"
+            f"{_yn_cell(da.user_guide_en)}"
+            f"{_yn_cell(bool(gh.latest_release))}"
+            f"<td>{_h(g.branch or '-')}</td>"
+            f"<td>{g.changed_files or 0}</td>"
+            f"</tr>"
+        )
+    headers = ["Projet", "Version", "Git", "GitHub", "Visib.", "README", "RF Fr", "UG Fr", "RF En", "UG En", "Release", "Branche", "Modifs"]
+    thead = "".join(f"<th>{h}</th>" for h in headers)
+    colgroup = '<colgroup><col class="project-col"><col class="data-col" span="12"></colgroup>'
+    tbody = "\n".join(rows)
+    return f"<table>\n{colgroup}\n<thead><tr>{thead}</tr></thead>\n<tbody>\n{tbody}\n</tbody>\n</table>"
+
+
+def _html_project_blocks(projects: list[ProjectReport]) -> str:
+    blocks = []
+    doc_fields = [
+        ("manuel_ref_fr", "Manuel de référence (FR)"),
+        ("guide_user_fr", "Guide utilisateur (FR)"),
+        ("ref_manual_en", "Reference Manual (EN)"),
+        ("user_guide_en", "User Guide (EN)"),
+    ]
+    for project in projects:
+        g = project.git
+        gh = project.github
+        da = project.doc_audit
+
+        doc_rows = ""
+        for key, label in doc_fields:
+            doc_rows += f"<tr><td class='lbl'>{_h(label)}</td>{_yn_cell(getattr(da, key))}</tr>\n"
+
+        bilan = "complète" if da.all_present() else f"{da.count_present()}/{len(DOC_NORM_ITEMS)} présents"
+
+        git_rows = f"<tr><td class='lbl'>Présent</td>{_yn_cell(g.present)}</tr>\n"
+        if g.present:
+            git_rows += (
+                f"<tr><td class='lbl'>Branche</td><td>{_h(g.branch or 'non détectée')}</td></tr>\n"
+                f"<tr><td class='lbl'>Remote GitHub</td>{_yn_cell(g.remote_github)}</tr>\n"
+                f"<tr><td class='lbl'>Modifications locales</td><td>{g.changed_files or 0}</td></tr>\n"
+                f"<tr><td class='lbl'>Tags</td><td>{g.tags_count or 0}</td></tr>\n"
+            )
+
+        if gh.available:
+            gh_rows = (
+                f"<tr><td class='lbl'>Dépôt</td><td>{_h(gh.repository or 'non détecté')}</td></tr>\n"
+                f"<tr><td class='lbl'>Visibilité</td><td>{_h(gh.visibility or 'non détectée')}</td></tr>\n"
+                f"<tr><td class='lbl'>Release récente</td><td>{_h(gh.latest_release or 'absente')}</td></tr>\n"
+                f"<tr><td class='lbl'>Pull requests ouvertes</td><td>{gh.open_prs if gh.open_prs is not None else 'non détectées'}</td></tr>\n"
+                f"<tr><td class='lbl'>Issues ouvertes</td><td>{gh.open_issues if gh.open_issues is not None else 'non détectées'}</td></tr>\n"
+            )
+        else:
+            gh_rows = f"<tr><td class='lbl'>Statut</td><td>{_h(gh.note or 'non disponible')}</td></tr>\n"
+
+        blocks.append(f"""
+<div class="project-block">
+  <h2>{_h(project.name)}</h2>
+  <h3>Version</h3>
+  <table class="inner">
+    <tr><td class='lbl'>Version outil</td><td>{_h(project.tool_version or 'non détectée')}</td></tr>
+  </table>
+  <h3>README</h3>
+  <table class="inner">
+    <tr><td class='lbl'>Présent</td>{_yn_cell(project_has_readme(project))}</tr>
+  </table>
+  <h3>Documentation normative</h3>
+  <table class="inner">
+    {doc_rows}
+    <tr><td class='lbl'>Bilan</td><td>{_h(bilan)}</td></tr>
+  </table>
+  <h3>Git</h3>
+  <table class="inner">
+    {git_rows}
+  </table>
+  <h3>GitHub</h3>
+  <table class="inner">
+    {gh_rows}
+  </table>
+</div>""")
+    return "\n".join(blocks)
+
+
+def _html_observations(projects: list[ProjectReport]) -> str:
+    items = notable_observations(projects)
+    if not items:
+        return "<p>Aucune observation.</p>"
+    lis = "\n".join(f"<li>{_h(obs)}</li>" for obs in items)
+    return f"<ul>\n{lis}\n</ul>"
+
+
+def _html_file_matrix(projects: list[ProjectReport]) -> str:
+    path_projects: dict[str, set[str]] = defaultdict(set)
+    for project in projects:
+        for entry in project.files:
+            path_projects[entry.path].add(project.name)
+
+    total = len(projects)
+    rare = sorted((p, n) for p, n in path_projects.items() if len(n) == 1)
+    frequent = sorted((p, n) for p, n in path_projects.items() if 1 < len(n) < total)
+
+    sections = []
+    if rare:
+        rows = ""
+        for path, names in rare[:40]:
+            rows += f"<tr><td>{_h(next(iter(names)))}</td><td>{_h(path)}</td></tr>\n"
+        if len(rare) > 40:
+            rows += f"<tr><td colspan='2' class='muted'>... {len(rare) - 40} autres éléments</td></tr>\n"
+        sections.append(f"<h3>Présents dans un seul projet</h3><table class='inner'><tr><th>Projet</th><th>Chemin</th></tr>\n{rows}</table>")
+
+    if frequent:
+        rows = ""
+        for path, names in frequent[:40]:
+            names_label = ", ".join(sorted(names))
+            rows += f"<tr><td>{_h(path)}</td><td>{len(names)}</td><td>{_h(names_label)}</td></tr>\n"
+        if len(frequent) > 40:
+            rows += f"<tr><td colspan='3' class='muted'>... {len(frequent) - 40} autres éléments</td></tr>\n"
+        sections.append(f"<h3>Présents dans plusieurs projets, mais pas tous</h3><table class='inner'><tr><th>Chemin</th><th>Nb</th><th>Projets</th></tr>\n{rows}</table>")
+
+    return "\n".join(sections) if sections else "<p>Aucun fichier à signaler.</p>"
+
+
 def build_html_report(projects: list[ProjectReport], root: Path) -> str:
+    import datetime
     title = f"DTLaudit {VERSION}"
-    text_report = build_text_report(projects, root)
-    escaped_report = html.escape(text_report)
+    generated = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    summary_table = _html_summary_table(projects)
+    project_blocks = _html_project_blocks(projects)
+    observations = _html_observations(projects)
+    file_matrix = _html_file_matrix(projects)
+
     return f"""<!doctype html>
 <html lang="fr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{html.escape(title)}</title>
+  <title>{_h(title)}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
   <style>
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+
+    :root {{
+      --bg:       #0b0d0f;
+      --surface:  #131619;
+      --surface2: #1a1e23;
+      --border:   rgba(255,255,255,0.07);
+      --border2:  rgba(255,255,255,0.12);
+      --text:     #e8eaed;
+      --muted:    #7a8290;
+      --accent:   #38bdf8;
+      --yes:      #4ade80;
+      --no:       #ff7a45;
+    }}
+
     body {{
-      margin: 0;
-      background: #f5f5f2;
-      color: #242424;
-      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      line-height: 1.7;
+      min-height: 100vh;
     }}
-    main {{
-      max-width: 1080px;
+
+    .grid-bg {{
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }}
+
+    header {{
+      position: relative;
+      z-index: 1;
+      padding: 48px 48px 36px;
+      max-width: 1200px;
       margin: 0 auto;
-      padding: 32px 24px;
+      border-bottom: 0.5px solid var(--border2);
     }}
+
+    .header-tag {{
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }}
+
     h1 {{
-      margin: 0 0 8px;
-      font-size: 28px;
-      font-weight: 700;
+      font-family: 'Syne', sans-serif;
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: #ffffff;
+      margin-bottom: 6px;
     }}
+
     .meta {{
-      margin: 0 0 24px;
-      color: #555;
-      font-size: 14px;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
     }}
-    pre {{
-      margin: 0;
-      padding: 20px;
-      overflow: auto;
-      background: #ffffff;
-      border: 1px solid #d8d8d2;
-      border-radius: 8px;
-      line-height: 1.45;
-      font-family: Consolas, "Courier New", monospace;
-      font-size: 14px;
-      white-space: pre-wrap;
+
+    main {{
+      position: relative;
+      z-index: 1;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px 48px 64px;
+    }}
+
+    section {{ margin-bottom: 48px; }}
+
+    h2 {{
+      font-family: 'Syne', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 0.5px solid var(--border2);
+    }}
+
+    h3 {{
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 16px 0 6px;
+    }}
+
+    /* Tables */
+    table {{
+      width: 100%;
+      table-layout: fixed;
+      border-collapse: collapse;
+      font-size: 13px;
+    }}
+    col.project-col {{ width: 180px; }}
+    col.data-col {{ width: 72px; }}
+    table.inner {{
+      width: auto;
+      table-layout: auto;
+      min-width: 360px;
+    }}
+    thead tr {{
+      border-bottom: 0.5px solid var(--border2);
+    }}
+    th {{
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 0 16px 10px 0;
+      font-weight: 400;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      background: transparent;
+      border: none;
+    }}
+    td {{
+      padding: 8px 16px 8px 0;
+      border-bottom: 0.5px solid var(--border);
+      vertical-align: middle;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }}
+    td.project-name {{
+      font-weight: 600;
+    }}
+    td.tool-version {{
+    }}
+    td.visibility {{
+    }}
+    td.github-cell {{
+    }}
+    tr:last-child td {{ border-bottom: none; }}
+    td.lbl {{
+      color: var(--muted);
+      white-space: nowrap;
+      width: 220px;
+      font-size: 12px;
+    }}
+    .yn-yes {{
+      color: var(--yes);
+      font-weight: 500;
+      text-align: center;
+      padding-right: 8px;
+      width: 46px;
+    }}
+    .yn-no {{
+      color: var(--no);
+      font-weight: 500;
+      text-align: center;
+      padding-right: 8px;
+      width: 46px;
+    }}
+    .muted-cell {{ color: var(--muted); font-style: italic; }}
+
+    /* Blocs projet */
+    .project-block {{
+      background: var(--surface);
+      border: 0.5px solid var(--border2);
+      border-left: 2px solid var(--accent);
+      padding: 20px 24px;
+      margin-bottom: 12px;
+    }}
+    .project-block h2 {{
+      font-family: 'Syne', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      text-transform: none;
+      color: var(--accent);
+      border: none;
+      padding: 0;
+      margin-bottom: 12px;
+    }}
+
+    /* Observations */
+    ul {{
+      padding-left: 18px;
+      line-height: 2;
+    }}
+    li {{ color: var(--text); font-size: 13px; }}
+
+    footer {{
+      position: relative;
+      z-index: 1;
+      border-top: 0.5px solid var(--border2);
+      padding: 20px 48px;
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.05em;
     }}
   </style>
 </head>
 <body>
+  <div class="grid-bg"></div>
+  <header>
+    <p class="header-tag">DTL Projects &bull; Rapport d&rsquo;audit</p>
+    <h1>{_h(title)}</h1>
+    <p class="meta">Racine&nbsp;: {_h(str(root))} &bull; {len(projects)} projet(s) scann&eacute;(s) &bull; aucune modification effectu&eacute;e</p>
+  </header>
   <main>
-    <h1>{html.escape(title)}</h1>
-    <p class="meta">Rapport comparatif entre projets - aucune modification effectuée</p>
-    <pre>{escaped_report}</pre>
+    <section>
+      <h2>Synth&egrave;se</h2>
+      {summary_table}
+    </section>
+
+    <section>
+      <h2>D&eacute;tail par projet</h2>
+      {project_blocks}
+    </section>
+
+    <section>
+      <h2>Observations remarquables</h2>
+      {observations}
+    </section>
+
+    <section>
+      <h2>Fichiers et r&eacute;pertoires observ&eacute;s</h2>
+      {file_matrix}
+    </section>
   </main>
+  <footer>
+    <span>{_h(title)} &mdash; {generated}</span>
+    <span>aucune modification effectu&eacute;e</span>
+  </footer>
 </body>
 </html>
 """
@@ -598,6 +1107,27 @@ def build_html_report(projects: list[ProjectReport], root: Path) -> str:
 def write_text_file(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
+
+
+def copy_json_to_xampp(
+    serialized_report: dict[str, Any],
+    source_path: Path | None = None,
+) -> None:
+    try:
+        if not XAMPP_JSON_DIR.is_dir():
+            return
+
+        target_path = XAMPP_JSON_DIR / DEFAULT_JSON_REPORT
+        if source_path is not None and source_path.is_file():
+            shutil.copy2(source_path, target_path)
+            return
+
+        write_text_file(
+            target_path,
+            json.dumps(serialized_report, ensure_ascii=False, indent=2),
+        )
+    except OSError:
+        return
 
 
 def print_if_available(message: str, stream: Any | None = None, end: str = "\n") -> None:
@@ -892,6 +1422,8 @@ def main() -> int:
     serialized_report = serialize(projects, root)
 
     text_report = None
+    json_path = None
+    html_path = None
     if args.text or html_output:
         text_report = build_text_report(projects, root)
 
@@ -912,8 +1444,11 @@ def main() -> int:
         html_path = output_path(html_output, DEFAULT_OUTPUT_DIR)
         write_text_file(html_path, build_html_report(projects, root))
         print_if_available(f"Rapport HTML écrit : {html_path}", sys.stderr)
-        if args.opened_from_window:
-            show_report_ready_dialog(html_path)
+
+    copy_json_to_xampp(serialized_report, json_path)
+
+    if html_path is not None and args.opened_from_window:
+        show_report_ready_dialog(html_path)
 
     print_if_available(
         text_report if text_report is not None else build_text_report(projects, root),

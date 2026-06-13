@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DTLaudit Dashboard</title>
+  <style>
+    :root {
+      --bg: #0b0d0f;
+      --surface: #131619;
+      --surface2: #1a1e23;
+      --border: rgba(255,255,255,.10);
+      --text: #e8eaed;
+      --muted: #7a8290;
+      --yes: #4ade80;
+      --no: #ff7a45;
+      --warn: #facc15;
+      --blue: #38bdf8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px),
+        var(--bg);
+      background-size: 40px 40px;
+      color: var(--text);
+      font-family: Consolas, "JetBrains Mono", "Courier New", monospace;
+    }
+    header {
+      padding: 28px 36px 22px;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 38px;
+      letter-spacing: -.03em;
+      font-family: Arial, Helvetica, sans-serif;
+      font-weight: 800;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    main { padding: 26px 36px 40px; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 26px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 14px 16px;
+      border-radius: 8px;
+    }
+    .card .label {
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .14em;
+      font-size: 10px;
+      margin-bottom: 6px;
+    }
+    .card .value {
+      font-size: 28px;
+      font-weight: 700;
+    }
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 16px;
+      color: var(--muted);
+      font-size: 12px;
+      flex-wrap: wrap;
+    }
+    button {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    button:hover { border-color: var(--blue); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: rgba(19,22,25,.75);
+      border: 1px solid var(--border);
+    }
+    th {
+      color: var(--muted);
+      text-align: left;
+      font-size: 11px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      padding: 12px 10px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td {
+      padding: 11px 10px;
+      border-bottom: 1px solid rgba(255,255,255,.055);
+      white-space: nowrap;
+    }
+    tr:hover td { background: rgba(56,189,248,.06); }
+    .project { font-weight: 700; }
+    .yes { color: var(--yes); font-weight: 700; }
+    .no { color: var(--no); font-weight: 700; }
+    .warn { color: var(--warn); font-weight: 700; }
+    .muted { color: var(--muted); }
+    .badrow td:first-child { border-left: 3px solid var(--no); }
+    .workrow td:first-child { border-left: 3px solid var(--warn); }
+    .okrow td:first-child { border-left: 3px solid var(--yes); }
+    .error {
+      border: 1px solid rgba(255,122,69,.55);
+      background: rgba(255,122,69,.08);
+      padding: 16px;
+      border-radius: 8px;
+      color: var(--no);
+    }
+    footer {
+      color: var(--muted);
+      padding: 0 36px 28px;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>DTLaudit Dashboard</h1>
+  <div class="meta" id="meta">Chargement de DTLaudit_rapport.json...</div>
+</header>
+
+<main>
+  <div class="cards">
+    <div class="card"><div class="label">Projets</div><div class="value" id="count-projects">-</div></div>
+    <div class="card"><div class="label">GitHub</div><div class="value" id="count-github">-</div></div>
+    <div class="card"><div class="label">Docs 4/4</div><div class="value" id="count-docs">-</div></div>
+    <div class="card"><div class="label">Releases</div><div class="value" id="count-releases">-</div></div>
+    <div class="card"><div class="label">Modifs</div><div class="value" id="count-changes">-</div></div>
+  </div>
+
+  <div class="toolbar">
+    <button onclick="loadReport()">Rafraîchir maintenant</button>
+    <span>Rafraîchissement automatique toutes les 60 secondes.</span>
+    <span id="last-refresh"></span>
+  </div>
+
+  <div id="content"></div>
+</main>
+
+<footer>
+  Place ce fichier dans le même dossier que DTLaudit_rapport.json. Ouvre-le via un serveur local si ton navigateur bloque la lecture du JSON en fichier direct.
+</footer>
+
+<script>
+const REPORT_URL = "DTLaudit_rapport.json";
+const REFRESH_MS = 60000;
+
+function yn(value) {
+  return value ? '<span class="yes">Oui</span>' : '<span class="no">Non</span>';
+}
+
+function safe(text) {
+  return String(text ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function hasReadme(project) {
+  return (project.files || []).some(e => String(e.path || "").toLowerCase().startsWith("readme"));
+}
+
+function docCount(project) {
+  const d = project.doc_audit || {};
+  return ["manuel_ref_fr", "guide_user_fr", "ref_manual_en", "user_guide_en"].filter(k => !!d[k]).length;
+}
+
+function render(data) {
+  const projects = data.projects || [];
+  const total = projects.length;
+
+  let githubCount = 0, docsFull = 0, releases = 0, changes = 0;
+
+  const rows = projects
+    .slice()
+    .sort((a,b) => a.name.localeCompare(b.name, "fr", {sensitivity:"base"}))
+    .map(p => {
+      const git = p.git || {};
+      const gh = p.github || {};
+      const d = p.doc_audit || {};
+      const github = !!(git.remote_github || gh.available);
+      const release = !!gh.latest_release;
+      const modifs = Number(git.changed_files || 0);
+      const docs = docCount(p);
+      githubCount += github ? 1 : 0;
+      docsFull += docs === 4 ? 1 : 0;
+      releases += release ? 1 : 0;
+      changes += modifs;
+
+      let cls = "okrow";
+      if (!git.present || !github || !hasReadme(p)) cls = "badrow";
+      else if (modifs > 0 || docs < 4 || !release) cls = "workrow";
+
+      return `<tr class="${cls}">
+        <td class="project">${safe(p.name)}</td>
+        <td>${yn(!!git.present)}</td>
+        <td>${yn(github)}</td>
+        <td>${yn(hasReadme(p))}</td>
+        <td>${yn(!!d.manuel_ref_fr)}</td>
+        <td>${yn(!!d.guide_user_fr)}</td>
+        <td>${yn(!!d.ref_manual_en)}</td>
+        <td>${yn(!!d.user_guide_en)}</td>
+        <td>${yn(release)}</td>
+        <td>${safe(git.branch || "-")}</td>
+        <td>${modifs ? `<span class="warn">${modifs}</span>` : '<span class="yes">0</span>'}</td>
+      </tr>`;
+    }).join("");
+
+  document.getElementById("count-projects").textContent = total;
+  document.getElementById("count-github").textContent = `${githubCount}/${total}`;
+  document.getElementById("count-docs").textContent = `${docsFull}/${total}`;
+  document.getElementById("count-releases").textContent = `${releases}/${total}`;
+  document.getElementById("count-changes").textContent = changes;
+
+  document.getElementById("meta").textContent =
+    `${safe(data.tool || "DTLaudit")} ${safe(data.version || "")} • Racine : ${safe(data.root || "")}`;
+
+  document.getElementById("content").innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Projet</th><th>Git</th><th>GitHub</th><th>README</th>
+          <th>RF Fr</th><th>UG Fr</th><th>RF En</th><th>UG En</th>
+          <th>Release</th><th>Branche</th><th>Modifs</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+async function loadReport() {
+  try {
+    const url = REPORT_URL + "?t=" + Date.now();
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json();
+    render(data);
+    document.getElementById("last-refresh").textContent =
+      "Dernier rafraîchissement : " + new Date().toLocaleTimeString("fr-FR");
+  } catch (err) {
+    document.getElementById("content").innerHTML =
+      `<div class="error">Impossible de lire ${REPORT_URL}.<br><br>${safe(err.message)}<br><br>
+      Astuce : lance un petit serveur dans le dossier du rapport :<br>
+      <code>py -m http.server 8000</code><br>
+      puis ouvre <code>http://localhost:8000/DTLaudit_dashboard.html</code></div>`;
+  }
+}
+
+loadReport();
+setInterval(loadReport, REFRESH_MS);
+</script>
+</body>
+</html>
