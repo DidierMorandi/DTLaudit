@@ -416,17 +416,23 @@ def project_count_label(count: int) -> str:
     return f"{count} projet" if count == 1 else f"{count} projets"
 
 
-def project_has_readme(project: ProjectReport) -> bool:
-    readme_files = {
-        "readme.md",
-        "readme_fr.md",
-        "readme_en.md",
-    }
-
+def project_has_file(project: ProjectReport, filenames: set[str]) -> bool:
     return any(
-        entry.path.lower() in readme_files
+        entry.path.lower() in filenames
         for entry in project.files
     )
+
+
+def project_has_readme_en(project: ProjectReport) -> bool:
+    return project_has_file(project, {"readme.md", "readme_en.md"})
+
+
+def project_has_readme_fr(project: ProjectReport) -> bool:
+    return project_has_file(project, {"readme_fr.md"})
+
+
+def project_has_readme(project: ProjectReport) -> bool:
+    return project_has_readme_en(project) or project_has_readme_fr(project)
  
 def oui_non(value: bool) -> str:
     return "Oui" if value else "Non"
@@ -452,7 +458,8 @@ def print_summary_table(projects: list[ProjectReport]) -> None:
                 "GitHub":   oui_non(project.git.remote_github or project.github.available),
                 "Branche":  project.git.branch or "-",
                 "Visib.":   visibility_label(project.github.visibility),
-                "README":   oui_non(project_has_readme(project)),
+                "README En": oui_non(project_has_readme_en(project)),
+                "README Fr": oui_non(project_has_readme_fr(project)),
                 "RF Fr":    oui_non(project.doc_audit.manuel_ref_fr),
                 "UG Fr":    oui_non(project.doc_audit.guide_user_fr),
                 "RF En":    oui_non(project.doc_audit.ref_manual_en),
@@ -462,7 +469,7 @@ def print_summary_table(projects: list[ProjectReport]) -> None:
             }
         )
 
-    columns = ["Projet", "Version", "Git", "GitHub", "Branche", "Visib.", "README", "RF Fr", "UG Fr", "RF En", "UG En", "Release", "Modifs"]
+    columns = ["Projet", "Version", "Git", "GitHub", "Branche", "Visib.", "README En", "README Fr", "RF Fr", "UG Fr", "RF En", "UG En", "Release", "Modifs"]
     widths = {
         column: max(len(column), *(len(row[column]) for row in rows)) if rows else len(column)
         for column in columns
@@ -483,7 +490,8 @@ def print_project_block(project: ProjectReport) -> None:
     print("Version :")
     print(f"    {project.tool_version or 'non détectée'}")
     print("README :")
-    print(f"    {present_absent(project_has_readme(project))}")
+    print(f"    anglais : {present_absent(project_has_readme_en(project))}")
+    print(f"    français : {present_absent(project_has_readme_fr(project))}")
     print("Documentation normative :")
     doc_labels = {
         "manuel_ref_fr": "Manuel de référence (FR)",
@@ -529,8 +537,16 @@ def notable_observations(projects: list[ProjectReport]) -> list[str]:
         return sum(1 for project in projects if predicate(project))
 
     readme_count = count_projects(project_has_readme)
+    readme_en_count = count_projects(project_has_readme_en)
+    readme_fr_count = count_projects(project_has_readme_fr)
     observations.append(
         f"README est présent dans {project_count_label(readme_count)} sur {total}."
+    )
+    observations.append(
+        f"README anglais est présent dans {project_count_label(readme_en_count)} sur {total}."
+    )
+    observations.append(
+        f"README français est présent dans {project_count_label(readme_fr_count)} sur {total}."
     )
 
     # Contrôle normatif documentation
@@ -714,7 +730,8 @@ def _html_summary_table(projects: list[ProjectReport]) -> str:
             f"{_yn_cell(bool(g.remote_github or gh.available), 'github-cell')}"
             f"<td>{_h(g.branch or '-')}</td>"
             f"<td class='visibility'>{_h(visibility_label(gh.visibility))}</td>"
-            f"{_yn_cell(project_has_readme(project))}"
+            f"{_yn_cell(project_has_readme_en(project))}"
+            f"{_yn_cell(project_has_readme_fr(project))}"
             f"{_yn_cell(da.manuel_ref_fr)}"
             f"{_yn_cell(da.guide_user_fr)}"
             f"{_yn_cell(da.ref_manual_en)}"
@@ -723,9 +740,9 @@ def _html_summary_table(projects: list[ProjectReport]) -> str:
             f"<td>{g.changed_files or 0}</td>"
             f"</tr>"
         )
-    headers = ["Projet", "Version", "Git", "GitHub", "Branche", "Visib.", "README", "RF Fr", "UG Fr", "RF En", "UG En", "Release", "Modifs"]
+    headers = ["Projet", "Version", "Git", "GitHub", "Branche", "Visib.", "README En", "README Fr", "RF Fr", "UG Fr", "RF En", "UG En", "Release", "Modifs"]
     thead = "".join(f"<th>{h}</th>" for h in headers)
-    colgroup = '<colgroup><col class="project-col"><col class="data-col" span="12"></colgroup>'
+    colgroup = '<colgroup><col class="project-col"><col class="data-col" span="13"></colgroup>'
     tbody = "\n".join(rows)
     return f"<table>\n{colgroup}\n<thead><tr>{thead}</tr></thead>\n<tbody>\n{tbody}\n</tbody>\n</table>"
 
@@ -778,7 +795,8 @@ def _html_project_blocks(projects: list[ProjectReport]) -> str:
   </table>
   <h3>README</h3>
   <table class="inner">
-    <tr><td class='lbl'>Présent</td>{_yn_cell(project_has_readme(project))}</tr>
+    <tr><td class='lbl'>Anglais</td>{_yn_cell(project_has_readme_en(project))}</tr>
+    <tr><td class='lbl'>Français</td>{_yn_cell(project_has_readme_fr(project))}</tr>
   </table>
   <h3>Documentation normative</h3>
   <table class="inner">
@@ -961,7 +979,7 @@ def build_html_report(projects: list[ProjectReport], root: Path) -> str:
       font-size: 13px;
     }}
     col.project-col {{ width: 180px; }}
-    col.data-col {{ width: 72px; }}
+    col.data-col {{ width: 68px; }}
     table.inner {{
       width: auto;
       table-layout: auto;
