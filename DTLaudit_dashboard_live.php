@@ -187,7 +187,7 @@ function render(data){
   const version=toolVersion(p);
   const vis=visibility(gh);
   const projectClass=m>0?"project dirty":"project";
-  return `<tr class="${cls}"><td class="${projectClass}" title="${safe(p.name)}">${safe(p.name)}</td><td class="version" title="${safe(version)}">${safe(version)}</td><td>${yn(!!g.present)}</td><td class="github">${yn(hasGh)}</td><td class="visibility" title="${safe(vis)}">${safe(vis)}</td><td>${yn(hasReadme(p))}</td><td>${yn(!!d.manuel_ref_fr)}</td><td>${yn(!!d.guide_user_fr)}</td><td>${yn(!!d.ref_manual_en)}</td><td>${yn(!!d.user_guide_en)}</td><td>${yn(hasRel)}</td><td>${safe(g.branch||"-")}</td><td>${m?`<span class="warn">${m}</span>`:'<span class="yes">0</span>'}</td></tr>`;
+  return `<tr class="${cls}"><td class="${projectClass}" title="${safe(p.name)}">${safe(p.name)}</td><td class="version" title="${safe(version)}">${safe(version)}</td><td>${yn(!!g.present)}</td><td class="github">${yn(hasGh)}</td><td>${safe(g.branch||"-")}</td><td class="visibility" title="${safe(vis)}">${safe(vis)}</td><td>${yn(hasReadme(p))}</td><td>${yn(!!d.manuel_ref_fr)}</td><td>${yn(!!d.guide_user_fr)}</td><td>${yn(!!d.ref_manual_en)}</td><td>${yn(!!d.user_guide_en)}</td><td>${yn(hasRel)}</td><td>${m?`<span class="warn">${m}</span>`:'<span class="yes">0</span>'}</td></tr>`;
  }).join("");
  document.getElementById("c-projects").textContent=total;
  document.getElementById("c-github").textContent=`${ghc}/${total}`;
@@ -195,7 +195,7 @@ function render(data){
  document.getElementById("c-releases").textContent=`${rel}/${total}`;
  document.getElementById("c-changes").textContent=chg;
  document.getElementById("meta").textContent=`${safe(data.tool||"DTLaudit")} ${safe(data.version||"")} • Racine : ${safe(data.root||"")}`;
- document.getElementById("content").innerHTML=`<table><colgroup><col class="project-col"><col class="data-col" span="12"></colgroup><thead><tr><th>Projet</th><th>Version</th><th>Git</th><th>GitHub</th><th>Visib.</th><th>README</th><th>RF Fr</th><th>UG Fr</th><th>RF En</th><th>UG En</th><th>Release</th><th>Branche</th><th>Modifs</th></tr></thead><tbody>${rows}</tbody></table>`;
+ document.getElementById("content").innerHTML=`<table><colgroup><col class="project-col"><col class="data-col" span="12"></colgroup><thead><tr><th>Projet</th><th>Version</th><th>Git</th><th>GitHub</th><th>Branche</th><th>Visib.</th><th>README</th><th>RF Fr</th><th>UG Fr</th><th>RF En</th><th>UG En</th><th>Release</th><th>Modifs</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 async function loadReport(force=false){
  if(scanInProgress) return;

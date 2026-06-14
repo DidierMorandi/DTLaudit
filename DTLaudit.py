@@ -450,6 +450,7 @@ def print_summary_table(projects: list[ProjectReport]) -> None:
                 "Version":  project.tool_version or "-",
                 "Git":      oui_non(project.git.present),
                 "GitHub":   oui_non(project.git.remote_github or project.github.available),
+                "Branche":  project.git.branch or "-",
                 "Visib.":   visibility_label(project.github.visibility),
                 "README":   oui_non(project_has_readme(project)),
                 "RF Fr":    oui_non(project.doc_audit.manuel_ref_fr),
@@ -457,12 +458,11 @@ def print_summary_table(projects: list[ProjectReport]) -> None:
                 "RF En":    oui_non(project.doc_audit.ref_manual_en),
                 "UG En":    oui_non(project.doc_audit.user_guide_en),
                 "Release":  oui_non(bool(project.github.latest_release)),
-                "Branche":  project.git.branch or "-",
                 "Modifs":   str(project.git.changed_files or 0),
             }
         )
 
-    columns = ["Projet", "Version", "Git", "GitHub", "Visib.", "README", "RF Fr", "UG Fr", "RF En", "UG En", "Release", "Branche", "Modifs"]
+    columns = ["Projet", "Version", "Git", "GitHub", "Branche", "Visib.", "README", "RF Fr", "UG Fr", "RF En", "UG En", "Release", "Modifs"]
     widths = {
         column: max(len(column), *(len(row[column]) for row in rows)) if rows else len(column)
         for column in columns
@@ -712,6 +712,7 @@ def _html_summary_table(projects: list[ProjectReport]) -> str:
             f"<td class='tool-version'>{_h(project.tool_version or '-')}</td>"
             f"{_yn_cell(g.present)}"
             f"{_yn_cell(bool(g.remote_github or gh.available), 'github-cell')}"
+            f"<td>{_h(g.branch or '-')}</td>"
             f"<td class='visibility'>{_h(visibility_label(gh.visibility))}</td>"
             f"{_yn_cell(project_has_readme(project))}"
             f"{_yn_cell(da.manuel_ref_fr)}"
@@ -719,11 +720,10 @@ def _html_summary_table(projects: list[ProjectReport]) -> str:
             f"{_yn_cell(da.ref_manual_en)}"
             f"{_yn_cell(da.user_guide_en)}"
             f"{_yn_cell(bool(gh.latest_release))}"
-            f"<td>{_h(g.branch or '-')}</td>"
             f"<td>{g.changed_files or 0}</td>"
             f"</tr>"
         )
-    headers = ["Projet", "Version", "Git", "GitHub", "Visib.", "README", "RF Fr", "UG Fr", "RF En", "UG En", "Release", "Branche", "Modifs"]
+    headers = ["Projet", "Version", "Git", "GitHub", "Branche", "Visib.", "README", "RF Fr", "UG Fr", "RF En", "UG En", "Release", "Modifs"]
     thead = "".join(f"<th>{h}</th>" for h in headers)
     colgroup = '<colgroup><col class="project-col"><col class="data-col" span="12"></colgroup>'
     tbody = "\n".join(rows)
