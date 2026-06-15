@@ -172,13 +172,13 @@ table{width:100%;table-layout:fixed;border-collapse:collapse;background:rgba(19,
 </div>
 <div class="toolbar">
 <button id="scan-button" type="button">Scanner maintenant</button>
-<span>Le dashboard lance DTLaudit toutes les 2 minutes.</span>
+<span>Le dashboard lance DTLaudit toutes les 60 secondes.</span>
 <span id="last-refresh"></span>
 </div>
 <div id="content"></div>
 </main>
 <script>
-const REFRESH_MS=120000;
+const REFRESH_MS=60000;
 let scanInProgress=false;
 function safe(x){return String(x??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;")}
 function yn(x){return x?'<span class="yes">Oui</span>':'<span class="no">Non</span>'}
