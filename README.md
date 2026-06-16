@@ -29,19 +29,19 @@ DTLaudit itself uses only the Python standard library.
 Audit a directory containing several projects:
 
 ```powershell
-python "D:\Documents\Mes sites Web\Secours catholique\outils\DTLaudit\DTLaudit.py" --suite "D:\Documents\Mes sites Web\Secours catholique\outils"
+python "D:\Documents\Mes sites Web\\outils\DTLaudit\DTLaudit.py" --suite "D:\Documents\Mes sites Web\\outils"
 ```
 
 Audit one project:
 
 ```powershell
-python "D:\Documents\Mes sites Web\Secours catholique\outils\DTLaudit\DTLaudit.py" --project "D:\Documents\Mes sites Web\Secours catholique\outils\GitHubMenu"
+python "D:\Documents\Mes sites Web\\outils\DTLaudit\DTLaudit.py" --project "D:\Documents\Mes sites Web\\outils\GitHubMenu"
 ```
 
 Skip GitHub queries:
 
 ```powershell
-python "D:\Documents\Mes sites Web\Secours catholique\outils\DTLaudit\DTLaudit.py" --suite "D:\Documents\Mes sites Web\Secours catholique\outils" --no-github
+python "D:\Documents\Mes sites Web\\outils\DTLaudit\DTLaudit.py" --suite "D:\Documents\Mes sites Web\\outils" --no-github
 ```
 
 ## Output Files
@@ -57,7 +57,7 @@ The file is written in the DTLaudit directory, next to `DTLaudit.py`.
 To also write JSON and text reports:
 
 ```powershell
-python "D:\Documents\Mes sites Web\Secours catholique\outils\DTLaudit\DTLaudit.py" --suite "D:\Documents\Mes sites Web\Secours catholique\outils" --json --text
+python "D:\Documents\Mes sites Web\\outils\DTLaudit\DTLaudit.py" --suite "D:\Documents\Mes sites Web\\outils" --json --text
 ```
 
 This creates:
@@ -71,7 +71,7 @@ DTLaudit_rapport.txt
 You can choose custom output paths:
 
 ```powershell
-python "D:\Documents\Mes sites Web\Secours catholique\outils\DTLaudit\DTLaudit.py" --suite "D:\Documents\Mes sites Web\Secours catholique\outils" --html "audit.html" --json "audit.json" --text "audit.txt"
+python "D:\Documents\Mes sites Web\\outils\DTLaudit\DTLaudit.py" --suite "D:\Documents\Mes sites Web\\outils" --html "audit.html" --json "audit.json" --text "audit.txt"
 ```
 
 Relative output paths are resolved from the DTLaudit directory.

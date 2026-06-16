@@ -29,19 +29,19 @@ DTLaudit n'utilise que la bibliothèque standard de Python.
 Auditer un dossier contenant plusieurs projets :
 
 ```powershell
-python "D:\Documents\Mes sites Web\Secours catholique\outils\DTLaudit\DTLaudit.py" --suite "D:\Documents\Mes sites Web\Secours catholique\outils"
+python "D:\Documents\Mes sites Web\\outils\DTLaudit\DTLaudit.py" --suite "D:\Documents\Mes sites Web\\outils"
 ```
 
 Auditer un seul projet :
 
 ```powershell
-python "D:\Documents\Mes sites Web\Secours catholique\outils\DTLaudit\DTLaudit.py" --project "D:\Documents\Mes sites Web\Secours catholique\outils\GitHubMenu"
+python "D:\Documents\Mes sites Web\\outils\DTLaudit\DTLaudit.py" --project "D:\Documents\Mes sites Web\\outils\GitHubMenu"
 ```
 
 Ignorer les requêtes GitHub :
 
 ```powershell
-python "D:\Documents\Mes sites Web\Secours catholique\outils\DTLaudit\DTLaudit.py" --suite "D:\Documents\Mes sites Web\Secours catholique\outils" --no-github
+python "D:\Documents\Mes sites Web\\outils\DTLaudit\DTLaudit.py" --suite "D:\Documents\Mes sites Web\\outils" --no-github
 ```
 
 ## Fichiers produits
@@ -57,7 +57,7 @@ Le fichier est écrit dans le dossier DTLaudit, à côté de `DTLaudit.py`.
 Pour produire aussi les rapports JSON et texte :
 
 ```powershell
-python "D:\Documents\Mes sites Web\Secours catholique\outils\DTLaudit\DTLaudit.py" --suite "D:\Documents\Mes sites Web\Secours catholique\outils" --json --text
+python "D:\Documents\Mes sites Web\\outils\DTLaudit\DTLaudit.py" --suite "D:\Documents\Mes sites Web\\outils" --json --text
 ```
 
 Fichiers créés :
@@ -71,7 +71,7 @@ DTLaudit_rapport.txt
 Il est possible de choisir des chemins de sortie personnalisés :
 
 ```powershell
-python "D:\Documents\Mes sites Web\Secours catholique\outils\DTLaudit\DTLaudit.py" --suite "D:\Documents\Mes sites Web\Secours catholique\outils" --html "audit.html" --json "audit.json" --text "audit.txt"
+python "D:\Documents\Mes sites Web\\outils\DTLaudit\DTLaudit.py" --suite "D:\Documents\Mes sites Web\\outils" --html "audit.html" --json "audit.json" --text "audit.txt"
 ```
 
 Les chemins relatifs sont résolus depuis le dossier DTLaudit.
