@@ -3,9 +3,9 @@
 // Place this file beside DTLaudit.py, then open it through XAMPP/PHP.
 // It launches DTLaudit.py itself and refreshes every 60 seconds.
 
-$PYTHON = 'py';
+$PYTHON = 'C:\Python314\python.exe';
 $DTLAUDIT_SCRIPT = __DIR__ . DIRECTORY_SEPARATOR . 'DTLaudit.py';
-$SUITE_ROOT = 'D:\\Documents\\Mes sites Web\\Secours catholique\\outils';
+$SUITE_ROOT = 'C:\Users\Utilisateur\Documents\Mes sites Web\Secours catholique\outils';
 $REPORT_JSON = __DIR__ . DIRECTORY_SEPARATOR . 'DTLaudit_rapport.json';
 $USE_GITHUB = true;
 $LOCK_FILE = __DIR__ . DIRECTORY_SEPARATOR . 'DTLaudit_scan.lock';
@@ -13,7 +13,15 @@ $LOCK_FILE = __DIR__ . DIRECTORY_SEPARATOR . 'DTLaudit_scan.lock';
 function json_response($data, $status = 200) {
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE);
+    if ($json === false) {
+        http_response_code(500);
+        $json = json_encode(array(
+            'ok' => false,
+            'error' => 'Erreur encodage JSON : ' . json_last_error_msg()
+        ), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    }
+    echo $json;
     exit;
 }
 
@@ -64,9 +72,9 @@ function run_dtlaudit($PYTHON, $DTLAUDIT_SCRIPT, $SUITE_ROOT, $REPORT_JSON, $USE
     }
 
     // Avoid launching several scans at the same time.
-    if (!$FORCE_SCAN && file_exists($LOCK_FILE) && (time() - filemtime($LOCK_FILE)) < 55) {
-        return array(true, "Scan déjà en cours ou lancé récemment.");
-    }
+	 if (!$FORCE_SCAN && file_exists($LOCK_FILE) && (time() - filemtime($LOCK_FILE)) < 55) {
+		return array(true, "Scan déjà en cours ou lancé récemment ; rapport existant conservé.");
+	}
 
     file_put_contents($LOCK_FILE, date('c'));
 
@@ -201,46 +209,73 @@ function render(data){
  document.getElementById("content").innerHTML=`<table><colgroup><col class="project-col"><col class="data-col" span="13"></colgroup><thead><tr><th>Projet</th><th>Version</th><th>Git</th><th>GitHub</th><th>Branche</th><th>Visib.</th><th>README En</th><th>README Fr</th><th>RF Fr</th><th>UG Fr</th><th>RF En</th><th>UG En</th><th>Release</th><th>Modifs</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 async function loadReport(force=false){
- if(scanInProgress) return;
- scanInProgress=true;
- const status=document.getElementById("last-refresh");
- const button=document.getElementById("scan-button");
- if(button){button.disabled=true;button.textContent="Scan en cours...";}
- status.textContent="Scan en cours...";
- status.classList.add("scanning");
- try{
-  const r=await fetch("?action=scan&force="+(force?"1":"0")+"&t="+Date.now(),{cache:"no-store"});
-  const data=await r.json();
-  if(!r.ok||data._dashboard?.ok===false) throw new Error(data._dashboard?.message||data.error||"Erreur inconnue");
-  render(data);
-  status.classList.remove("scanning");
-  status.textContent="Dernier scan : "+new Date().toLocaleTimeString("fr-FR");
- }catch(e){
-  status.classList.remove("scanning");
+  if(scanInProgress) return;
+  scanInProgress=true;
 
-  let msg = safe(e.message);
+  const status=document.getElementById("last-refresh");
+  const button=document.getElementById("scan-button");
 
-  if (msg.includes("Failed to fetch")) {
-      msg = "Apache/XAMPP semble arrêté ou inaccessible.";
+  if(button){
+    button.disabled=true;
+    button.textContent="Scan en cours...";
   }
 
-  document.getElementById("content").innerHTML=
+  status.textContent="Scan en cours...";
+  status.classList.add("scanning");
+
+  try {
+    const r = await fetch("?action=scan&force="+(force?"1":"0")+"&t="+Date.now(), {cache:"no-store"});
+    const text = await r.text();
+
+    if (!text.trim()) {
+      throw new Error("Réponse vide de DTLaudit_dashboard_live.php?action=scan");
+    }
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      console.error("Réponse brute reçue :", text);
+      throw new Error("Réponse JSON invalide de DTLaudit");
+    }
+
+    if (data.ok === false) {
+      throw new Error(data.error || "DTLaudit a retourné une erreur");
+    }
+
+    render(data);
+    status.textContent="Dernier scan : " + new Date().toLocaleString();
+
+  } catch(e) {
+    const msg = e && e.message ? e.message : String(e);
+
+    document.getElementById("content").innerHTML =
       `<div class="error">
 Impossible de contacter DTLaudit.
 
 ${msg}
-
-Vérifie qu'Apache est démarré dans XAMPP.
 </div>`;
 
-  status.textContent="Serveur indisponible";
-}finally{
-  scanInProgress=false;
-  if(button){button.disabled=false;button.textContent="Scanner maintenant";}
+    status.textContent="Erreur";
+  } finally {
+    scanInProgress=false;
+    status.classList.remove("scanning");
+
+    if(button){
+      button.disabled=false;
+      button.textContent="Relancer le scan";
+    }
+  }
 }
-}
-document.getElementById("scan-button").addEventListener("click",()=>loadReport(true));
-loadReport(); setInterval(loadReport,REFRESH_MS);
+document.getElementById("scan-button").addEventListener("click", function(){
+  loadReport(true);
+});
+
+loadReport(false);
+
+setInterval(function(){
+  loadReport(false);
+}, REFRESH_MS);
 </script>
 </body>
 </html>
