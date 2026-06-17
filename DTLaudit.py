@@ -3,7 +3,16 @@
 
 """DTLaudit - rapport comparatif en lecture seule.
 
-Compilation PyInstaller (pas de fenêtre console) :
+Version console réécrite :
+- les erreurs des commandes externes ne sont plus envoyées à la poubelle ;
+- les messages Git / GitHub CLI / Python sont affichés sur stderr ;
+- l'option --quiet permet de rendre l'exécution silencieuse ;
+- l'option --debug affiche les piles Python en cas d'erreur inattendue.
+
+Compilation PyInstaller avec console :
+    pyinstaller --onefile DTLaudit.py
+
+Compilation PyInstaller sans console, pour usage graphique uniquement :
     pyinstaller --onefile --noconsole DTLaudit.py
 """
 
@@ -19,6 +28,7 @@ import re
 import shutil
 import subprocess
 import sys
+import traceback
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -50,6 +60,36 @@ PROJECT_FILE_PATTERNS = (
     "README*",
 )
 SCAN_STATUS_MESSAGE = "%DTLaudit-I-Scan, scanning folder(s)..."
+
+QUIET = False
+DEBUG = False
+
+
+def console_message(code: str, message: str, *, stream: Any | None = None) -> None:
+    """Affiche un message de diagnostic façon DEC/VMS sur stderr par défaut."""
+    if QUIET:
+        return
+    target = stream if stream is not None else sys.stderr
+    try:
+        print(f"{code}, {message}", file=target)
+    except Exception:
+        pass
+
+
+def console_detail(message: str, *, stream: Any | None = None) -> None:
+    """Affiche une ligne de détail indentée."""
+    if QUIET:
+        return
+    target = stream if stream is not None else sys.stderr
+    try:
+        print(f"    {message}", file=target)
+    except Exception:
+        pass
+
+
+def command_label(args: list[str]) -> str:
+    return " ".join(str(part) for part in args)
+
 
 
 def subprocess_window_options() -> dict[str, Any]:
@@ -135,20 +175,80 @@ class ProjectReport:
 
 
 def run_command(args: list[str], cwd: Path, timeout: int = 12) -> tuple[int, str]:
+    """Exécute une commande externe et affiche les erreurs en mode console.
+
+    Ancien comportement :
+        stderr=subprocess.DEVNULL
+    Conséquence :
+        les messages Git, gh ou Windows disparaissaient.
+
+    Nouveau comportement :
+        stderr=subprocess.PIPE
+        les erreurs sont affichées sur stderr, mais ne polluent pas les champs du rapport.
+    """
+    label = command_label(args)
+
     try:
         completed = subprocess.run(
             args,
             cwd=str(cwd),
             text=True,
             stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
             timeout=timeout,
             check=False,
             **subprocess_window_options(),
         )
-    except (OSError, subprocess.TimeoutExpired):
+    except FileNotFoundError:
+        console_message(
+            "%DTLaudit-E-CMDNOTFOUND",
+            f"commande introuvable : {args[0]}",
+        )
+        console_detail(f"Répertoire courant : {cwd}")
+        console_detail(f"Commande : {label}")
         return 1, ""
-    return completed.returncode, completed.stdout.strip()
+    except subprocess.TimeoutExpired:
+        console_message(
+            "%DTLaudit-E-CMDTIMEOUT",
+            f"délai dépassé après {timeout} secondes",
+        )
+        console_detail(f"Répertoire courant : {cwd}")
+        console_detail(f"Commande : {label}")
+        return 1, ""
+    except OSError as exc:
+        console_message(
+            "%DTLaudit-E-CMDERROR",
+            "impossible de lancer une commande externe",
+        )
+        console_detail(f"Répertoire courant : {cwd}")
+        console_detail(f"Commande : {label}")
+        console_detail(str(exc))
+        return 1, ""
+
+    stdout = (completed.stdout or "").strip()
+    stderr = (completed.stderr or "").strip()
+
+    if completed.returncode != 0:
+        console_message(
+            "%DTLaudit-W-CMDFAILED",
+            f"commande terminée avec le code {completed.returncode}",
+        )
+        console_detail(f"Répertoire courant : {cwd}")
+        console_detail(f"Commande : {label}")
+        if stderr:
+            for line in stderr.splitlines():
+                console_detail(line)
+        elif stdout:
+            for line in stdout.splitlines()[:12]:
+                console_detail(line)
+        else:
+            console_detail("Aucun message retourné par la commande.")
+
+        # Important : ne pas retourner stderr ici.
+        # Les collecteurs testent le code retour et doivent garder un champ vide en cas d'échec.
+        return completed.returncode, ""
+
+    return completed.returncode, stdout
 
 
 def iso_mtime(path: Path) -> str:
@@ -1231,17 +1331,61 @@ def serialize(projects: list[ProjectReport], root: Path) -> dict[str, Any]:
         "observations": notable_observations(projects),
     }
 
+class DTLArgumentParser(argparse.ArgumentParser):
+
+    def error(self, message):
+
+        print()
+        print("%DTLaudit-E-SYNTAX")
+        print()
+        print("ERREUR :")
+        print(f"        {message}")
+        print()
+        print("DESCRIPTION :")
+        print("        DTLaudit compare un ou plusieurs projets et génère un rapport HTML, TXT ou JSON.")
+        print()
+        print("SYNTAXE :")
+        print("        python DTLaudit --project <répertoire>")
+        print("        python DTLaudit --suite <répertoire>")
+        print()
+        print("OPTIONS :")
+        print("        --project      Analyse un seul projet.")
+        print("        --suite        Analyse plusieurs projets.")
+        print("        --json         Génère un rapport JSON.")
+        print("        --txt          Génère un rapport texte.")
+        print("        --html         Génère un rapport HTML.")
+        print("        --no-github    N'interroge pas GitHub.")
+        print("        --debug        Affiche les informations de diagnostic.")
+        print("        --quiet        N'affiche que les erreurs et les avertissements.")
+        print()
+        print("EXEMPLES :")
+        print("        python DTLaudit --project C:\\MesProjets\\GitDTL")
+        print("        python DTLaudit --suite C:\\MesProjets")
+        print("        python DTLaudit --suite C:\\MesProjets --json --html")
+        print()
+
+        raise SystemExit(2)
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=f"DTLaudit {VERSION}")
+    parser = DTLArgumentParser(
+        description=f"DTLaudit {VERSION}",
+        add_help=False,
+        usage="python dtlaudit.py (--project <projet> | --suite <répertoire>) [options]"
+    )
     target = parser.add_mutually_exclusive_group(required=True)
-    target.add_argument("--project", help="Projet local à scanner")
-    target.add_argument("--suite", help="Répertoire contenant plusieurs projets")
+    parser.add_argument(
+        "-h",
+        "--help",
+        action="help",
+        help="Affiche cette aide et quitte"
+)
+    target.add_argument("--project", help="Analyse un projet unique")
+    target.add_argument("--suite", help="Analyse un répertoire contenant plusieurs projets")
     parser.add_argument(
         "--json",
         nargs="?",
         const=DEFAULT_JSON_REPORT,
-        help="Écrire aussi un rapport JSON",
+        help="Produire un rapport au format JSON",
     )
     parser.add_argument(
         "--no-github",
@@ -1254,13 +1398,23 @@ def parse_args() -> argparse.Namespace:
         dest="text",
         nargs="?",
         const=DEFAULT_TXT_REPORT,
-        help="Écrire aussi un rapport texte",
+        help="Produire un rapport au format texte",
     )
     parser.add_argument(
         "--html",
         nargs="?",
         const=DEFAULT_HTML_REPORT,
-        help="Écrire aussi un rapport HTML",
+        help="Produire un rapport au format HTML",
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Ne pas afficher les messages de diagnostic console",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Affiche des informations techniques détaillées en cas d'erreur inattendue",
     )
     return parser.parse_args()
 
@@ -1308,6 +1462,8 @@ def ask_user_for_target() -> argparse.Namespace | None:
                 text=None,
                 html=None,
                 no_github=False,
+                quiet=False,
+                debug=False,
                 opened_from_window=True,
             )
             root.destroy()
@@ -1402,6 +1558,8 @@ def show_report_ready_dialog(report_path: Path) -> None:
 
 
 def main() -> int:
+    global QUIET, DEBUG
+
     status_line = None
     if len(sys.argv) == 1:
         args = ask_user_for_target()
@@ -1410,20 +1568,29 @@ def main() -> int:
     else:
         args = parse_args()
         args.opened_from_window = False
+
+    QUIET = bool(getattr(args, "quiet", False))
+    DEBUG = bool(getattr(args, "debug", False))
+
     github_enabled = not args.no_github
     html_output = args.html or DEFAULT_HTML_REPORT
+
+    console_message("%DTLaudit-I-START", f"DTLaudit {VERSION} démarre")
 
     if args.opened_from_window:
         status_line = ScanStatusLine()
 
     if args.project:
         root = Path(args.project).resolve()
+        console_message("%DTLaudit-I-TARGET", f"projet unique : {root}")
         project_paths = [root]
     else:
         root = Path(args.suite).resolve()
+        console_message("%DTLaudit-I-TARGET", f"suite de projets : {root}")
         if status_line is not None:
             status_line.update(f"{SCAN_STATUS_MESSAGE} discovering projects")
         project_paths = discover_projects(root)
+        console_message("%DTLaudit-I-DISCOVER", f"{len(project_paths)} projet(s) détecté(s)")
 
     projects = []
     try:
@@ -1432,10 +1599,14 @@ def main() -> int:
                 status_line.update(
                     f"{SCAN_STATUS_MESSAGE} ({index}/{len(project_paths)}) {path.name}"
                 )
+            console_message("%DTLaudit-I-SCAN", f"{index}/{len(project_paths)} {path.name}")
             projects.append(scan_project(path, github_enabled))
     finally:
         if status_line is not None:
             status_line.close()
+
+    if not projects:
+        console_message("%DTLaudit-W-NOPROJECT", "aucun projet détecté")
 
     serialized_report = serialize(projects, root)
 
@@ -1472,8 +1643,21 @@ def main() -> int:
         text_report if text_report is not None else build_text_report(projects, root),
         end="",
     )
+    console_message("%DTLaudit-I-DONE", "audit terminé")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except KeyboardInterrupt:
+        console_message("%DTLaudit-F-ABORT", "interruption par l'utilisateur")
+        raise SystemExit(130)
+    except Exception as exc:
+        console_message("%DTLaudit-F-ABORT", "erreur Python inattendue")
+        console_detail(str(exc))
+        if DEBUG:
+            traceback.print_exc()
+        else:
+            console_detail("Relancer avec --debug pour afficher la pile Python complète.")
+        raise SystemExit(1)
