@@ -1531,7 +1531,7 @@ def ask_user_for_target() -> argparse.Namespace | None:
         return root.result
     except Exception:
         print_if_available(
-            "DTLaudit doit etre lance avec --suite ou --project.",
+            "DTLaudit doit être lancé avec --suite ou --project.",
             sys.stderr,
         )
         return None
