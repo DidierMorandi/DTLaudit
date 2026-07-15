@@ -3,9 +3,21 @@
 // Place this file beside DTLaudit.py, then open it through XAMPP/PHP.
 // It launches DTLaudit.py itself and refreshes every 60 seconds.
 
-$PYTHON = 'C:\Python314\python.exe';
+$PYTHON_CANDIDATES = array(
+    'C:\Program Files\Python314\python.exe',
+    'C:\Python314\python.exe',
+    'C:\Windows\py.exe'
+);
+$PYTHON = '';
+foreach ($PYTHON_CANDIDATES as $candidate) {
+    if (is_file($candidate)) {
+        $PYTHON = $candidate;
+        break;
+    }
+}
 $DTLAUDIT_SCRIPT = __DIR__ . DIRECTORY_SEPARATOR . 'DTLaudit.py';
-$SUITE_ROOT = 'C:\Users\Utilisateur\Documents\Secato\outils';
+// Le dashboard se trouve dans le sous-dossier DTLaudit de la suite.
+$SUITE_ROOT = dirname(__DIR__);
 $REPORT_JSON = __DIR__ . DIRECTORY_SEPARATOR . 'DTLaudit_rapport.json';
 $USE_GITHUB = true;
 $LOCK_FILE = __DIR__ . DIRECTORY_SEPARATOR . 'DTLaudit_scan.lock';
@@ -67,8 +79,16 @@ function detect_tool_version($project) {
 }
 
 function run_dtlaudit($PYTHON, $DTLAUDIT_SCRIPT, $SUITE_ROOT, $REPORT_JSON, $USE_GITHUB, $LOCK_FILE, $FORCE_SCAN = false) {
+    if ($PYTHON === '' || !is_file($PYTHON)) {
+        return array(false, "Python introuvable. Vérifiez l'installation de Python 3.");
+    }
+
     if (!file_exists($DTLAUDIT_SCRIPT)) {
         return array(false, "DTLaudit.py introuvable : " . $DTLAUDIT_SCRIPT);
+    }
+
+    if (!is_dir($SUITE_ROOT)) {
+        return array(false, "Dossier de la suite introuvable : " . $SUITE_ROOT);
     }
 
     // Avoid launching several scans at the same time.
@@ -78,7 +98,7 @@ function run_dtlaudit($PYTHON, $DTLAUDIT_SCRIPT, $SUITE_ROOT, $REPORT_JSON, $USE
 
     file_put_contents($LOCK_FILE, date('c'));
 
-    $cmd = $PYTHON . ' ' .
+    $cmd = escapeshellarg($PYTHON) . ' ' .
         escapeshellarg($DTLAUDIT_SCRIPT) .
         ' --suite ' . escapeshellarg($SUITE_ROOT) .
         ' --json ' . escapeshellarg($REPORT_JSON);
@@ -239,8 +259,8 @@ async function loadReport(force=false){
       throw new Error("Réponse JSON invalide de DTLaudit");
     }
 
-    if (data.ok === false) {
-      throw new Error(data.error || "DTLaudit a retourné une erreur");
+    if (!r.ok || data.ok === false || data._dashboard?.ok === false) {
+      throw new Error(data.error || data._dashboard?.message || "DTLaudit a retourné une erreur");
     }
 
     render(data);
