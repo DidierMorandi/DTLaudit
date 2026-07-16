@@ -3,21 +3,9 @@
 // Place this file beside DTLaudit.py, then open it through XAMPP/PHP.
 // It launches DTLaudit.py itself and refreshes every 60 seconds.
 
-$PYTHON_CANDIDATES = array(
-    'C:\Program Files\Python314\python.exe',
-    'C:\Python314\python.exe',
-    'C:\Windows\py.exe'
-);
-$PYTHON = '';
-foreach ($PYTHON_CANDIDATES as $candidate) {
-    if (is_file($candidate)) {
-        $PYTHON = $candidate;
-        break;
-    }
-}
-$DTLAUDIT_SCRIPT = __DIR__ . DIRECTORY_SEPARATOR . 'DTLaudit.py';
-// Le dashboard se trouve dans le sous-dossier DTLaudit de la suite.
-$SUITE_ROOT = dirname(__DIR__);
+$PYTHON = 'C:\Program Files\Python314\python.exe';
+$DTLAUDIT_SCRIPT = 'D:\Documents\Mes sites Web\Secours catholique\outils\DTLaudit\DTLaudit.py';
+$SUITE_ROOT = 'D:\Documents\Mes sites Web\Secours catholique\outils';
 $REPORT_JSON = __DIR__ . DIRECTORY_SEPARATOR . 'DTLaudit_rapport.json';
 $USE_GITHUB = true;
 $LOCK_FILE = __DIR__ . DIRECTORY_SEPARATOR . 'DTLaudit_scan.lock';
@@ -79,16 +67,8 @@ function detect_tool_version($project) {
 }
 
 function run_dtlaudit($PYTHON, $DTLAUDIT_SCRIPT, $SUITE_ROOT, $REPORT_JSON, $USE_GITHUB, $LOCK_FILE, $FORCE_SCAN = false) {
-    if ($PYTHON === '' || !is_file($PYTHON)) {
-        return array(false, "Python introuvable. Vérifiez l'installation de Python 3.");
-    }
-
     if (!file_exists($DTLAUDIT_SCRIPT)) {
         return array(false, "DTLaudit.py introuvable : " . $DTLAUDIT_SCRIPT);
-    }
-
-    if (!is_dir($SUITE_ROOT)) {
-        return array(false, "Dossier de la suite introuvable : " . $SUITE_ROOT);
     }
 
     // Avoid launching several scans at the same time.
@@ -119,6 +99,90 @@ function run_dtlaudit($PYTHON, $DTLAUDIT_SCRIPT, $SUITE_ROOT, $REPORT_JSON, $USE
     }
 
     return array(true, implode("\n", array_slice($output, 0, 12)));
+}
+
+function run_selftest($PYTHON, $DTLAUDIT_SCRIPT, $REPORT_JSON) {
+    $checks = array(
+        'php' => extension_loaded('json'),
+        'python' => false,
+        'json' => false,
+        'html' => false,
+        'javascript' => false,
+    );
+    $projects = 0;
+
+    if (is_file($PYTHON) && is_file($DTLAUDIT_SCRIPT)) {
+        $python_output = array();
+        $python_code = 1;
+        exec(escapeshellarg($PYTHON) . ' --version 2>&1', $python_output, $python_code);
+        $checks['python'] = ($python_code === 0);
+    }
+
+    if (is_file($REPORT_JSON)) {
+        $report = json_decode((string) @file_get_contents($REPORT_JSON), true);
+        $checks['json'] = is_array($report) && isset($report['projects']) && is_array($report['projects']);
+        if ($checks['json']) {
+            $projects = count($report['projects']);
+        }
+    }
+
+    $source = (string) @file_get_contents(__FILE__);
+    $html_markers = array('<!doctype html>', '<html', '<head>', '</head>', '<body>', '</body>', '</html>');
+    $checks['html'] = $source !== '';
+    foreach ($html_markers as $marker) {
+        if (stripos($source, $marker) === false) {
+            $checks['html'] = false;
+            break;
+        }
+    }
+
+    if (preg_match('/<script\b[^>]*>(.*?)<\/script>/is', $source, $script_match)) {
+        $javascript = $script_match[1];
+        $checks['javascript'] =
+            strpos($javascript, 'function render(') !== false &&
+            strpos($javascript, 'async function loadReport(') !== false &&
+            strpos($javascript, 'addEventListener(') !== false &&
+            strpos($javascript, 'setInterval(') !== false;
+
+        // Si Node.js est disponible, compléter le contrôle structurel par une
+        // véritable validation syntaxique, sans exécuter le JavaScript.
+        if ($checks['javascript']) {
+            $node_version = array();
+            $node_version_code = 1;
+            exec('node --version 2>&1', $node_version, $node_version_code);
+            if ($node_version_code === 0) {
+                $temporary_script = tempnam(sys_get_temp_dir(), 'dtlaudit_js_');
+                if ($temporary_script === false) {
+                    $checks['javascript'] = false;
+                } else {
+                    file_put_contents($temporary_script, $javascript);
+                    $node_output = array();
+                    $node_code = 1;
+                    exec('node --check ' . escapeshellarg($temporary_script) . ' 2>&1', $node_output, $node_code);
+                    @unlink($temporary_script);
+                    $checks['javascript'] = ($node_code === 0);
+                }
+            }
+        }
+    }
+
+    $warnings = count(array_filter($checks, static function ($ok) {
+        return !$ok;
+    }));
+
+    $result = array();
+    foreach ($checks as $name => $ok) {
+        $result[$name] = $ok ? 'ok' : 'error';
+    }
+    $result['projects'] = $projects;
+    $result['warnings'] = $warnings;
+
+    return $result;
+}
+
+if (($_GET['action'] ?? '') === 'selftest') {
+    $result = run_selftest($PYTHON, $DTLAUDIT_SCRIPT, $REPORT_JSON);
+    json_response($result, $result['warnings'] === 0 ? 200 : 503);
 }
 
 if (($_GET['action'] ?? '') === 'scan') {
@@ -165,21 +229,33 @@ if (($_GET['action'] ?? '') === 'scan') {
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<title>DTLaudit Dashboard Live</title>
+<title>DTLaudit — Tableau de bord en direct</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 :root{--bg:#0b0d0f;--panel:#131619;--panel2:#1a1e23;--line:rgba(255,255,255,.10);--txt:#e8eaed;--muted:#7a8290;--yes:#4ade80;--no:#ff7a45;--warn:#facc15;--blue:#38bdf8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--txt);font-family:Consolas,"Courier New",monospace}
 body:before{content:"";position:fixed;inset:0;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:40px 40px;pointer-events:none}
-header,main{position:relative;z-index:1} header{padding:28px 36px 18px} h1{font-family:Arial,sans-serif;font-size:38px;margin:0 0 8px}.meta{color:var(--muted);font-size:13px}
-main{padding:26px 36px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px}.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px}.label{color:var(--muted);text-transform:uppercase;letter-spacing:.14em;font-size:10px}.value{font-size:28px;font-weight:700}
-.toolbar{display:flex;gap:12px;align-items:center;color:var(--muted);font-size:12px;margin-bottom:16px;flex-wrap:wrap}button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:8px 12px;font-family:inherit;cursor:pointer}button:hover{border-color:var(--blue)}button:disabled{opacity:.55;cursor:wait}.scanning{color:var(--warn);font-weight:700;animation:blinkScan .9s ease-in-out infinite}@keyframes blinkScan{0%,100%{opacity:1}50%{opacity:.18}}
+header,main{position:relative;z-index:1}header{padding:12px 18px 4px}.brand{display:flex;align-items:flex-start;justify-content:space-between;gap:24px}.brand-copy{min-width:0}h1{font-family:inherit;font-size:16px;font-weight:700;line-height:1.2;margin:0 0 4px}.brand-suite,.brand-website{font-size:12px;line-height:1.35}.brand-suite{color:var(--txt)}.brand-website{color:var(--muted);text-decoration:none}.brand-website:hover{color:var(--blue)}.netdtl-logo{display:grid;grid-template-columns:repeat(6,20px);flex:0 0 auto;border:1px solid #fff;background:#0201b7}.netdtl-logo span{display:grid;place-items:center;height:34px;color:#fff;font:700 16px Arial,sans-serif;border-right:1px solid rgba(255,255,255,.78)}.netdtl-logo span:last-child{border-right:0}.subtitle{margin-top:8px;font-size:13px;font-weight:700}.meta{margin-top:3px;color:var(--muted);font-size:12px}
+main{padding:10px 18px}.cards{display:flex;align-items:baseline;gap:28px;flex-wrap:wrap;margin-bottom:10px}.card{display:flex;align-items:baseline;gap:7px;background:none;border:0;border-radius:0;padding:0}.label{color:var(--muted);text-transform:uppercase;letter-spacing:.10em;font-size:10px}.value{font-size:inherit;font-weight:700}
+.toolbar{display:flex;gap:12px;align-items:center;color:var(--muted);font-size:12px;margin-bottom:10px;flex-wrap:wrap}button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-family:inherit;cursor:pointer}button:hover{border-color:var(--blue)}button:disabled{opacity:.55;cursor:wait}.scanning{color:var(--warn);font-weight:700;animation:blinkScan .9s ease-in-out infinite}@keyframes blinkScan{0%,100%{opacity:1}50%{opacity:.18}}
 table{width:100%;table-layout:fixed;border-collapse:collapse;background:rgba(19,22,25,.75);border:1px solid var(--line)}col.project-col{width:180px}col.data-col{width:68px}th{color:var(--muted);text-align:left;font-size:11px;letter-spacing:.10em;text-transform:uppercase;padding:12px 6px;border-bottom:1px solid var(--line);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}td{padding:2px 6px;border-bottom:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}tr:hover td{background:rgba(56,189,248,.06)}.project{font-weight:700}.project.dirty{color:var(--warn)}.yes{color:var(--yes);font-weight:700}.no{color:var(--no);font-weight:700}.warn{color:var(--warn);font-weight:700}.okrow td:first-child{border-left:3px solid var(--yes)}.workrow td:first-child{border-left:3px solid var(--warn)}.badrow td:first-child{border-left:3px solid var(--no)}.error{border:1px solid rgba(255,122,69,.55);background:rgba(255,122,69,.08);padding:16px;border-radius:8px;color:var(--no);white-space:pre-wrap}
+@media (max-width:640px){.brand{gap:14px}.cards{gap:10px 22px}.netdtl-logo{grid-template-columns:repeat(6,18px)}.netdtl-logo span{height:30px;font-size:14px}}
+@media (max-width:460px){.brand{display:block}.netdtl-logo{margin-top:8px;width:max-content}}
 </style>
 </head>
 <body>
 <header>
-<h1>DTLaudit Dashboard Live</h1>
+<div class="brand">
+<div class="brand-copy">
+<h1>DTLaudit <span id="app-version"></span></h1>
+<div class="brand-suite">Un outil de la suite NetDTL</div>
+<a class="brand-website" href="https://www.netdtl.com/" target="_blank" rel="noopener noreferrer">www.netdtl.com</a>
+</div>
+<div class="netdtl-logo" role="img" aria-label="Logo NetDTL">
+<span>N</span><span>e</span><span>t</span><span>D</span><span>T</span><span>L</span>
+</div>
+</div>
+<div class="subtitle">Tableau de bord d’audit des projets en direct</div>
 <div class="meta" id="meta">Prêt à lancer le premier scan...</div>
 </header>
 <main>
@@ -225,7 +301,8 @@ function render(data){
  document.getElementById("c-docs").textContent=`${docs}/${total}`;
  document.getElementById("c-releases").textContent=`${rel}/${total}`;
  document.getElementById("c-changes").textContent=chg;
- document.getElementById("meta").textContent=`${safe(data.tool||"DTLaudit")} ${safe(data.version||"")} • Racine : ${safe(data.root||"")}`;
+ document.getElementById("app-version").textContent=data.version||"";
+ document.getElementById("meta").textContent=`Racine : ${data.root||""}`;
  document.getElementById("content").innerHTML=`<table><colgroup><col class="project-col"><col class="data-col" span="13"></colgroup><thead><tr><th>Projet</th><th>Version</th><th>Git</th><th>GitHub</th><th>Branche</th><th>Visib.</th><th>README En</th><th>README Fr</th><th>RF Fr</th><th>UG Fr</th><th>RF En</th><th>UG En</th><th>Release</th><th>Modifs</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 async function loadReport(force=false){
@@ -259,8 +336,8 @@ async function loadReport(force=false){
       throw new Error("Réponse JSON invalide de DTLaudit");
     }
 
-    if (!r.ok || data.ok === false || data._dashboard?.ok === false) {
-      throw new Error(data.error || data._dashboard?.message || "DTLaudit a retourné une erreur");
+    if (data.ok === false) {
+      throw new Error(data.error || "DTLaudit a retourné une erreur");
     }
 
     render(data);
