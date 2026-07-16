@@ -26,6 +26,16 @@ DTLaudit n'utilise que la bibliothèque standard de Python.
 
 ## Utilisation
 
+Lancé sans argument, DTLaudit affiche une interface console inspirée de DTLi18n :
+
+```powershell
+python "D:\Documents\Mes sites Web\outils\DTLaudit\DTLaudit.py"
+```
+
+Le menu permet de choisir l'audit d'une suite ou d'un projet, puis ouvre
+l'Explorateur Windows afin de sélectionner le dossier. Une fois l'audit terminé,
+DTLaudit propose d'ouvrir le rapport HTML et revient au menu principal.
+
 Auditer un dossier contenant plusieurs projets :
 
 ```powershell
@@ -88,7 +98,8 @@ Les chemins relatifs sont résolus depuis le dossier DTLaudit.
 --no-github          Ne pas interroger GitHub avec gh.
 ```
 
-`--project` et `--suite` sont exclusifs. L'un des deux est obligatoire.
+`--project` et `--suite` sont exclusifs. L'un des deux est obligatoire en mode
+ligne de commande ; sans argument, le menu console interactif est utilisé.
 
 ## Découverte des projets
 
@@ -140,13 +151,15 @@ Il parcourt les fichiers, lit les métadonnées Git et appelle éventuellement `
 
 Les artefacts générés comme `build/`, `dist/` et les exécutables peuvent créer beaucoup de bruit Git s'ils sont suivis. DTLaudit les signale afin de permettre une revue et, si nécessaire, leur ajout dans `.gitignore`.
 
-## Mise à jour - 14 juin 2026
+## Mise à jour - 16 juillet 2026
 
-Le code courant annonce `v1.0-9` dans `DTLaudit.py`.
+Le code courant annonce `v1.1-0` dans `DTLaudit.py`.
 
 Nouveautés confirmées dans le code :
 
-- Une fenêtre Tkinter s'ouvre lorsque l'outil est lancé sans argument, afin de choisir un projet ou une suite complète.
+- L'interface Tkinter a été remplacée par une interface console cohérente avec DTLi18n.
+- Le lancement sans argument affiche un menu permettant d'auditer une suite ou un projet.
+- La sélection du dossier se fait dans l'Explorateur Windows ; la progression, l'ouverture du rapport et le retour au menu restent pilotés depuis la console.
 - Le rapport HTML est généré par défaut sous le nom `DTLaudit_rapport.html`.
 - Les sorties JSON et texte restent optionnelles via `--json` et `--txt` / `--text`.
 - L'audit vérifie maintenant la présence des guides utilisateur et manuels de référence en plus du README.

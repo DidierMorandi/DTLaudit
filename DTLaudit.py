@@ -1,20 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""DTLaudit - rapport comparatif en lecture seule.
-
-Version console réécrite :
-- les erreurs des commandes externes ne sont plus envoyées à la poubelle ;
-- les messages Git / GitHub CLI / Python sont affichés sur stderr ;
-- l'option --quiet permet de rendre l'exécution silencieuse ;
-- l'option --debug affiche les piles Python en cas d'erreur inattendue.
-
-Compilation PyInstaller avec console :
-    pyinstaller --onefile DTLaudit.py
-
-Compilation PyInstaller sans console, pour usage graphique uniquement :
-    pyinstaller --onefile --noconsole DTLaudit.py
-"""
+"""DTLaudit - rapport comparatif en lecture seule, avec interface console."""
 
 from __future__ import annotations
 
@@ -41,7 +28,21 @@ def application_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
-VERSION = "v1.0-9"
+APP_NAME = "DTLaudit"
+VERSION = "v1.1-0"
+APP_SUITE = "Un outil de la suite NetDTL"
+APP_WEBSITE = "www.netdtl.com"
+APP_SUBTITLE = "Audit comparatif de projets en lecture seule"
+LOGO_LINES = (
+    "┌─┬─┬─┬─┬─┬─┐",
+    "│N│e│t│D│T│L│",
+    "└─┴─┴─┴─┴─┴─┘",
+)
+ANSI_LOGO = "\033[38;2;255;255;255;48;2;2;1;183m"
+ANSI_BOLD = "\033[1m"
+ANSI_RED = "\033[38;2;255;0;0m"
+ANSI_GREEN = "\033[38;2;0;255;0m"
+ANSI_RESET = "\033[0m"
 DEFAULT_OUTPUT_DIR = application_dir()
 DEFAULT_JSON_REPORT = "DTLaudit_rapport.json"
 DEFAULT_TXT_REPORT = "DTLaudit_rapport.txt"
@@ -59,10 +60,100 @@ PROJECT_FILE_PATTERNS = (
     "*.cmd",
     "README*",
 )
-SCAN_STATUS_MESSAGE = "%DTLaudit-I-Scan, scanning folder(s)..."
-
 QUIET = False
 DEBUG = False
+
+
+def clear_console() -> None:
+    os.system("cls" if os.name == "nt" else "clear")
+
+
+def configure_console_streams() -> None:
+    """Garantit l'affichage du français et du logo, même avec une sortie redirigée."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (OSError, ValueError):
+            pass
+
+
+def console_width() -> int:
+    try:
+        return max(76, min(shutil.get_terminal_size().columns, 160))
+    except OSError:
+        return 100
+
+
+def supports_color() -> bool:
+    if not sys.stdout.isatty() or "NO_COLOR" in os.environ:
+        return False
+    if os.name != "nt":
+        return os.environ.get("TERM", "").casefold() != "dumb"
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.GetStdHandle(-11)
+        mode = ctypes.c_uint32()
+        if handle in (0, -1) or not kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            return False
+        return bool(kernel32.SetConsoleMode(handle, mode.value | 0x0004))
+    except (AttributeError, OSError, ValueError):
+        return False
+
+
+def styled(text: str, ansi_code: str, color: bool | None = None) -> str:
+    enabled = supports_color() if color is None else color
+    return f"{ansi_code}{text}{ANSI_RESET}" if enabled else text
+
+
+def brand_header_lines(screen_width: int, color: bool = False) -> list[str]:
+    left = (f"{APP_NAME} {VERSION}", APP_SUITE, APP_WEBSITE)
+    gap = 3
+    logo_width = len(LOGO_LINES[0])
+    left_width = max(0, screen_width - logo_width - gap)
+    result: list[str] = []
+    for index, (text, logo) in enumerate(zip(left, LOGO_LINES)):
+        text = text[:left_width]
+        padding = " " * (left_width - len(text))
+        visible_text = (
+            f"{ANSI_BOLD}{text}{ANSI_RESET}{padding}"
+            if color and index == 0
+            else f"{text}{padding}"
+        )
+        visible_logo = f"{ANSI_LOGO}{logo}{ANSI_RESET}" if color else logo
+        result.append(f"{visible_text}{' ' * gap}{visible_logo}")
+    result.extend(("", APP_SUBTITLE, "", "=" * screen_width))
+    return result
+
+
+def show_application_header() -> None:
+    clear_console()
+    print("\n".join(brand_header_lines(console_width(), supports_color())))
+
+
+def validated_choice(prompt: str, choices: set[str]) -> str:
+    while True:
+        value = input(prompt).strip().upper()
+        if value in choices:
+            return value
+        print(styled("Choix invalide. Saisissez une option proposée.", ANSI_RED))
+
+
+def ask_yes_no(prompt: str, default: bool = True) -> bool:
+    suffix = "O/n" if default else "o/N"
+    while True:
+        value = input(f"{prompt} [{suffix}] : ").strip().casefold()
+        if not value:
+            return default
+        if value in {"o", "oui", "y", "yes"}:
+            return True
+        if value in {"n", "non", "no"}:
+            return False
+        print(styled("Réponse invalide. Saisissez O ou N.", ANSI_RED))
 
 
 def console_message(code: str, message: str, *, stream: Any | None = None) -> None:
@@ -1255,65 +1346,6 @@ def print_if_available(message: str, stream: Any | None = None, end: str = "\n")
     print(message, file=target, end=end)
 
 
-class ScanStatusLine:
-    def __init__(self, message: str = SCAN_STATUS_MESSAGE) -> None:
-        self.root = None
-        self.label = None
-        try:
-            import tkinter as tk
-
-            root = tk.Tk()
-            root.overrideredirect(True)
-            root.attributes("-topmost", True)
-            root.configure(bg="#1f2937")
-
-            label = tk.Label(
-                root,
-                text=message,
-                anchor="w",
-                bg="#1f2937",
-                fg="#ffffff",
-                padx=14,
-                pady=5,
-                font=("Consolas", 10),
-            )
-            label.pack(fill="both", expand=True)
-
-            root.update_idletasks()
-            width = root.winfo_screenwidth()
-            height = 30
-            y = max(0, root.winfo_screenheight() - height - 48)
-            root.geometry(f"{width}x{height}+0+{y}")
-            root.update()
-
-            self.root = root
-            self.label = label
-        except Exception:
-            self.root = None
-            self.label = None
-
-    def update(self, message: str = SCAN_STATUS_MESSAGE) -> None:
-        if self.root is None or self.label is None:
-            return
-        try:
-            self.label.configure(text=message)
-            self.root.update_idletasks()
-            self.root.update()
-        except Exception:
-            self.close()
-
-    def close(self) -> None:
-        if self.root is None:
-            return
-        try:
-            self.root.destroy()
-        except Exception:
-            pass
-        finally:
-            self.root = None
-            self.label = None
-
-
 def output_path(value: str, root: Path) -> Path:
     path = Path(value)
     if path.is_absolute():
@@ -1419,155 +1451,73 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def ask_user_for_target() -> argparse.Namespace | None:
+def choose_start_mode() -> str:
+    show_application_header()
+    print("\nChoisissez un mode :\n")
+    print("1  Auditer un dossier contenant plusieurs projets")
+    print("2  Auditer un seul projet")
+    print("Q : Quitter")
+    return validated_choice("\nVotre choix : ", {"1", "2", "Q"})
+
+
+def choose_directory(mode: str) -> Path | None:
+    """Ouvre le sélecteur de dossiers natif, comme DTLi18n."""
+    title = (
+        "Choisir le dossier contenant les projets"
+        if mode == "suite"
+        else "Choisir le dossier du projet à auditer"
+    )
+    root = None
     try:
         import tkinter as tk
         from tkinter import filedialog
-        from tkinter import messagebox
-        from tkinter import ttk
-
-        root = tk.Tk()
-        root.title(f"DTLaudit {VERSION}")
-        root.resizable(False, False)
-        root.attributes("-topmost", True)
-        root.result = None
-
-        mode = tk.StringVar(value="suite")
-        selected_path = tk.StringVar(value="")
-
-        def choose_folder() -> None:
-            title = (
-                "Choisir le dossier contenant les projets"
-                if mode.get() == "suite"
-                else "Choisir le dossier du projet"
-            )
-            folder = filedialog.askdirectory(parent=root, title=title)
-            if folder:
-                selected_path.set(folder)
-                start_button.state(["!disabled"])
-
-        def start_audit() -> None:
-            path = selected_path.get().strip()
-            if not path:
-                messagebox.showwarning(
-                    "Dossier manquant",
-                    "Choisissez d’abord le dossier à auditer.",
-                    parent=root,
-                )
-                return
-            root.result = argparse.Namespace(
-                project=path if mode.get() == "project" else None,
-                suite=path if mode.get() == "suite" else None,
-                json=None,
-                text=None,
-                html=None,
-                no_github=False,
-                quiet=False,
-                debug=False,
-                opened_from_window=True,
-            )
-            root.destroy()
-
-        def cancel() -> None:
-            root.result = None
-            root.destroy()
-
-        frame = ttk.Frame(root, padding=24)
-        frame.grid(row=0, column=0, sticky="nsew")
-
-        title = ttk.Label(
-            frame,
-            text="Que voulez-vous auditer ?",
-            font=("Segoe UI", 14, "bold"),
-        )
-        title.grid(row=0, column=0, columnspan=2, sticky="w")
-
-        intro = ttk.Label(
-            frame,
-            text="DTLaudit va générer un rapport HTML sans modifier vos fichiers.",
-        )
-        intro.grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 18))
-
-        ttk.Radiobutton(
-            frame,
-            text="Un dossier contenant plusieurs projets",
-            variable=mode,
-            value="suite",
-        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=2)
-        ttk.Radiobutton(
-            frame,
-            text="Un seul projet",
-            variable=mode,
-            value="project",
-        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=2)
-
-        ttk.Entry(frame, textvariable=selected_path, width=58).grid(
-            row=4,
-            column=0,
-            sticky="ew",
-            pady=(18, 0),
-        )
-        ttk.Button(frame, text="Choisir...", command=choose_folder).grid(
-            row=4,
-            column=1,
-            padx=(8, 0),
-            pady=(18, 0),
-        )
-
-        buttons = ttk.Frame(frame)
-        buttons.grid(row=5, column=0, columnspan=2, sticky="e", pady=(22, 0))
-        ttk.Button(buttons, text="Annuler", command=cancel).grid(row=0, column=0)
-        start_button = ttk.Button(buttons, text="Lancer l’audit", command=start_audit)
-        start_button.grid(row=0, column=1, padx=(8, 0))
-        start_button.state(["disabled"])
-
-        root.bind("<Escape>", lambda event: cancel())
-        root.protocol("WM_DELETE_WINDOW", cancel)
-        root.update_idletasks()
-        x = (root.winfo_screenwidth() - root.winfo_width()) // 2
-        y = (root.winfo_screenheight() - root.winfo_height()) // 3
-        root.geometry(f"+{x}+{y}")
-        root.mainloop()
-        return root.result
-    except Exception:
-        print_if_available(
-            "DTLaudit doit être lancé avec --suite ou --project.",
-            sys.stderr,
-        )
-        return None
-
-
-def show_report_ready_dialog(report_path: Path) -> None:
-    try:
-        import tkinter as tk
-        from tkinter import messagebox
 
         root = tk.Tk()
         root.withdraw()
         root.attributes("-topmost", True)
-        open_report = messagebox.askyesno(
-            "DTLaudit - rapport créé",
-            f"Le rapport est prêt :\n\n{report_path}\n\nVoulez-vous l’ouvrir maintenant ?",
-            parent=root,
-        )
-        root.destroy()
-        if open_report:
+        root.update_idletasks()
+        selected = filedialog.askdirectory(parent=root, title=title, mustexist=True)
+        return Path(selected).resolve() if selected else None
+    except Exception as exc:
+        print(styled(f"Impossible d'ouvrir le sélecteur de dossiers : {exc}", ANSI_RED))
+        input("\nAppuyer sur <Return> pour revenir au menu principal.")
+        return None
+    finally:
+        if root is not None:
+            try:
+                root.destroy()
+            except Exception:
+                pass
+
+
+def interactive_args(mode: str, path: Path) -> argparse.Namespace:
+    return argparse.Namespace(
+        project=str(path) if mode == "project" else None,
+        suite=str(path) if mode == "suite" else None,
+        json=None,
+        text=None,
+        html=None,
+        no_github=False,
+        quiet=False,
+        debug=False,
+        interactive=True,
+    )
+
+
+def open_report(report_path: Path) -> None:
+    try:
+        if os.name == "nt":
             os.startfile(report_path)
-    except Exception:
-        print_if_available(f"Rapport HTML écrit : {report_path}", sys.stderr)
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(report_path)])
+        else:
+            subprocess.Popen(["xdg-open", str(report_path)])
+    except OSError as exc:
+        print(styled(f"Impossible d'ouvrir le rapport : {exc}", ANSI_RED))
 
 
-def main() -> int:
+def run_audit(args: argparse.Namespace) -> tuple[int, Path | None]:
     global QUIET, DEBUG
-
-    status_line = None
-    if len(sys.argv) == 1:
-        args = ask_user_for_target()
-        if args is None:
-            return 2
-    else:
-        args = parse_args()
-        args.opened_from_window = False
 
     QUIET = bool(getattr(args, "quiet", False))
     DEBUG = bool(getattr(args, "debug", False))
@@ -1577,33 +1527,26 @@ def main() -> int:
 
     console_message("%DTLaudit-I-START", f"DTLaudit {VERSION} démarre")
 
-    if args.opened_from_window:
-        status_line = ScanStatusLine()
-
     if args.project:
         root = Path(args.project).resolve()
+        if not root.is_dir():
+            console_message("%DTLaudit-E-NOTFOUND", f"dossier introuvable : {root}")
+            return 2, None
         console_message("%DTLaudit-I-TARGET", f"projet unique : {root}")
         project_paths = [root]
     else:
         root = Path(args.suite).resolve()
+        if not root.is_dir():
+            console_message("%DTLaudit-E-NOTFOUND", f"dossier introuvable : {root}")
+            return 2, None
         console_message("%DTLaudit-I-TARGET", f"suite de projets : {root}")
-        if status_line is not None:
-            status_line.update(f"{SCAN_STATUS_MESSAGE} discovering projects")
         project_paths = discover_projects(root)
         console_message("%DTLaudit-I-DISCOVER", f"{len(project_paths)} projet(s) détecté(s)")
 
     projects = []
-    try:
-        for index, path in enumerate(project_paths, start=1):
-            if status_line is not None:
-                status_line.update(
-                    f"{SCAN_STATUS_MESSAGE} ({index}/{len(project_paths)}) {path.name}"
-                )
-            console_message("%DTLaudit-I-SCAN", f"{index}/{len(project_paths)} {path.name}")
-            projects.append(scan_project(path, github_enabled))
-    finally:
-        if status_line is not None:
-            status_line.close()
+    for index, path in enumerate(project_paths, start=1):
+        console_message("%DTLaudit-I-SCAN", f"{index}/{len(project_paths)} {path.name}")
+        projects.append(scan_project(path, github_enabled))
 
     if not projects:
         console_message("%DTLaudit-W-NOPROJECT", "aucun projet détecté")
@@ -1636,15 +1579,43 @@ def main() -> int:
 
     copy_json_to_xampp(serialized_report, json_path)
 
-    if html_path is not None and args.opened_from_window:
-        show_report_ready_dialog(html_path)
-
     print_if_available(
         text_report if text_report is not None else build_text_report(projects, root),
         end="",
     )
     console_message("%DTLaudit-I-DONE", "audit terminé")
-    return 0
+    return 0, html_path
+
+
+def run_interactive() -> int:
+    while True:
+        choice = choose_start_mode()
+        if choice == "Q":
+            return 0
+        mode = "suite" if choice == "1" else "project"
+        path = choose_directory(mode)
+        if path is None:
+            continue
+
+        show_application_header()
+        print(f"\nDossier : {styled(str(path), ANSI_GREEN)}")
+        print("L'audit démarre. Aucun fichier du projet ne sera modifié.\n")
+        code, report_path = run_audit(interactive_args(mode, path))
+
+        if code == 0 and report_path is not None:
+            print(f"\nRapport HTML : {styled(str(report_path), ANSI_GREEN)}")
+            if ask_yes_no("Ouvrir le rapport maintenant ?", True):
+                open_report(report_path)
+        input("\nAppuyer sur <Return> pour revenir au menu principal.")
+
+
+def main() -> int:
+    configure_console_streams()
+    if len(sys.argv) == 1:
+        return run_interactive()
+    args = parse_args()
+    code, _ = run_audit(args)
+    return code
 
 
 if __name__ == "__main__":
