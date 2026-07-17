@@ -235,10 +235,10 @@ if (($_GET['action'] ?? '') === 'scan') {
 :root{--bg:#0b0d0f;--panel:#131619;--panel2:#1a1e23;--line:rgba(255,255,255,.10);--txt:#e8eaed;--muted:#7a8290;--yes:#4ade80;--no:#ff7a45;--warn:#facc15;--blue:#38bdf8}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--txt);font-family:Consolas,"Courier New",monospace}
 body:before{content:"";position:fixed;inset:0;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:40px 40px;pointer-events:none}
-header,main{position:relative;z-index:1}header{padding:12px 18px 4px}.brand{display:flex;align-items:flex-start;justify-content:space-between;gap:24px}.brand-copy{min-width:0}h1{font-family:inherit;font-size:16px;font-weight:700;line-height:1.2;margin:0 0 4px}.brand-suite,.brand-website{font-size:12px;line-height:1.35}.brand-suite{color:var(--txt)}.brand-website{color:var(--muted);text-decoration:none}.brand-website:hover{color:var(--blue)}.netdtl-logo{display:grid;grid-template-columns:repeat(6,20px);flex:0 0 auto;border:1px solid #fff;background:#0201b7}.netdtl-logo span{display:grid;place-items:center;height:34px;color:#fff;font:700 16px Arial,sans-serif;border-right:1px solid rgba(255,255,255,.78)}.netdtl-logo span:last-child{border-right:0}.subtitle{margin-top:8px;font-size:13px;font-weight:700}.meta{margin-top:3px;color:var(--muted);font-size:12px}
-main{padding:10px 18px}.cards{display:flex;align-items:baseline;gap:28px;flex-wrap:wrap;margin-bottom:10px}.card{display:flex;align-items:baseline;gap:7px;background:none;border:0;border-radius:0;padding:0}.label{color:var(--muted);text-transform:uppercase;letter-spacing:.10em;font-size:10px}.value{font-size:inherit;font-weight:700}
-.toolbar{display:flex;gap:12px;align-items:center;color:var(--muted);font-size:12px;margin-bottom:10px;flex-wrap:wrap}button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-family:inherit;cursor:pointer}button:hover{border-color:var(--blue)}button:disabled{opacity:.55;cursor:wait}.scanning{color:var(--warn);font-weight:700;animation:blinkScan .9s ease-in-out infinite}@keyframes blinkScan{0%,100%{opacity:1}50%{opacity:.18}}
-table{width:100%;table-layout:fixed;border-collapse:collapse;background:rgba(19,22,25,.75);border:1px solid var(--line)}col.project-col{width:180px}col.data-col{width:68px}th{color:var(--muted);text-align:left;font-size:11px;letter-spacing:.10em;text-transform:uppercase;padding:12px 6px;border-bottom:1px solid var(--line);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}td{padding:2px 6px;border-bottom:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}tr:hover td{background:rgba(56,189,248,.06)}.project{font-weight:700}.project.dirty{color:var(--warn)}.yes{color:var(--yes);font-weight:700}.no{color:var(--no);font-weight:700}.warn{color:var(--warn);font-weight:700}.okrow td:first-child{border-left:3px solid var(--yes)}.workrow td:first-child{border-left:3px solid var(--warn)}.badrow td:first-child{border-left:3px solid var(--no)}.error{border:1px solid rgba(255,122,69,.55);background:rgba(255,122,69,.08);padding:16px;border-radius:8px;color:var(--no);white-space:pre-wrap}
+ header,main{position:relative;z-index:1}header{padding:10px 14px 3px}.brand{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}.brand-copy{min-width:0}h1{font-family:inherit;font-size:16px;font-weight:700;line-height:1.2;margin:0 0 3px}.brand-suite,.brand-website{font-size:12px;line-height:1.3}.brand-suite{color:var(--txt)}.brand-website{color:var(--muted);text-decoration:none}.brand-website:hover{color:var(--blue)}.netdtl-logo{display:grid;grid-template-columns:repeat(6,20px);flex:0 0 auto;border:1px solid #fff;background:#0201b7}.netdtl-logo span{display:grid;place-items:center;height:32px;color:#fff;font:700 16px Arial,sans-serif;border-right:1px solid rgba(255,255,255,.78)}.netdtl-logo span:last-child{border-right:0}.subtitle{margin-top:6px;font-size:13px;font-weight:700}.meta{margin-top:2px;color:var(--muted);font-size:12px}
+ main{padding:7px 14px}.cards{display:flex;align-items:baseline;gap:24px;flex-wrap:wrap;margin-bottom:7px}.card{display:flex;align-items:baseline;gap:6px;background:none;border:0;border-radius:0;padding:0}.label{color:var(--muted);text-transform:uppercase;letter-spacing:.10em;font-size:10px}.value{font-size:inherit;font-weight:700}
+ .toolbar{display:flex;gap:10px;align-items:center;color:var(--muted);font-size:12px;margin-bottom:7px;flex-wrap:wrap}button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-family:inherit;cursor:pointer}button:hover{border-color:var(--blue)}button:disabled{opacity:.55;cursor:wait}.scanning{color:var(--warn);font-weight:700;animation:blinkScan .9s ease-in-out infinite}@keyframes blinkScan{0%,100%{opacity:1}50%{opacity:.18}}
+ table{width:100%;table-layout:fixed;border-collapse:collapse;background:rgba(19,22,25,.75);border:1px solid var(--line)}col.project-col{width:145px}col.date-col{width:120px}col.data-col{width:60px}th{color:var(--muted);text-align:left;font-size:11px;letter-spacing:.10em;padding:8px 3px;border-bottom:1px solid var(--line);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}td{padding:1px 3px;border-bottom:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}tr:hover td{background:rgba(56,189,248,.06)}.project{font-weight:700}.project.dirty{color:var(--warn)}.yes{color:var(--yes);font-weight:700}.no{color:var(--no);font-weight:700}.warn{color:var(--warn);font-weight:700}.okrow td:first-child{border-left:3px solid var(--yes)}.workrow td:first-child{border-left:3px solid var(--warn)}.badrow td:first-child{border-left:3px solid var(--no)}.error{border:1px solid rgba(255,122,69,.55);background:rgba(255,122,69,.08);padding:16px;border-radius:8px;color:var(--no);white-space:pre-wrap}
 @media (max-width:640px){.brand{gap:14px}.cards{gap:10px 22px}.netdtl-logo{grid-template-columns:repeat(6,18px)}.netdtl-logo span{height:30px;font-size:14px}}
 @media (max-width:460px){.brand{display:block}.netdtl-logo{margin-top:8px;width:max-content}}
 </style>
@@ -282,8 +282,25 @@ function hasFile(p,names){return (p.files||[]).some(e=>names.includes(String(e.p
 function hasReadmeEn(p){return hasFile(p,["readme.md","readme_en.md"])}
 function hasReadmeFr(p){return hasFile(p,["readme_fr.md"])}
 function hasReadme(p){return hasReadmeEn(p)||hasReadmeFr(p)}
+function hasI18n(p){
+ return (p.files||[]).some(e=>{
+  const path=String(e.path||"").toLowerCase();
+  return e.kind==="file" &&
+   /i18n/.test(path) &&
+   !/(^|\/)(__pycache__|build|dist|tests?)(\/|$)/.test(path) &&
+   !/(backup|audit|conversion|migration|retired|\.pyc$)/.test(path);
+ });
+}
 function docCount(p){const d=p.doc_audit||{};return ["manuel_ref_fr","guide_user_fr","ref_manual_en","user_guide_en"].filter(k=>!!d[k]).length}
 function toolVersion(p){return p.tool_version||p.display_version||p.version||p.dtl_version?.display_version||p.dtl_version?.version||"-"}
+function pushDate(value){
+ const date=new Date(value||"");
+ if(Number.isNaN(date.getTime())) return {short:"-",full:"-"};
+ return {
+  short:new Intl.DateTimeFormat("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false}).format(date),
+  full:new Intl.DateTimeFormat("fr-FR",{dateStyle:"short",timeStyle:"short"}).format(date)
+ };
+}
 function visibility(gh){const v=String(gh?.visibility||"").toLowerCase(); if(v==="public") return "public"; if(v==="private"||v==="internal") return "privé"; return "-"}
 function render(data){
  const projects=data.projects||[]; const total=projects.length; let ghc=0,docs=0,rel=0,chg=0;
@@ -292,9 +309,10 @@ function render(data){
   ghc+=hasGh?1:0; docs+=dc===4?1:0; rel+=hasRel?1:0; chg+=m;
   let cls="okrow"; if(!g.present||!hasGh||!hasReadme(p)) cls="badrow"; else if(m>0||dc<4||!hasRel) cls="workrow";
   const version=toolVersion(p);
+  const pushed=pushDate(gh.pushed_at);
   const vis=visibility(gh);
   const projectClass=m>0?"project dirty":"project";
-  return `<tr class="${cls}"><td class="${projectClass}" title="${safe(p.name)}">${safe(p.name)}</td><td class="version" title="${safe(version)}">${safe(version)}</td><td>${yn(!!g.present)}</td><td class="github">${yn(hasGh)}</td><td>${safe(g.branch||"-")}</td><td class="visibility" title="${safe(vis)}">${safe(vis)}</td><td>${yn(hasReadmeEn(p))}</td><td>${yn(hasReadmeFr(p))}</td><td>${yn(!!d.manuel_ref_fr)}</td><td>${yn(!!d.guide_user_fr)}</td><td>${yn(!!d.ref_manual_en)}</td><td>${yn(!!d.user_guide_en)}</td><td>${yn(hasRel)}</td><td>${m?`<span class="warn">${m}</span>`:'<span class="yes">0</span>'}</td></tr>`;
+  return `<tr class="${cls}"><td class="${projectClass}" title="${safe(p.name)}">${safe(p.name)}</td><td class="version" title="${safe(version)}">${safe(version)}</td><td class="date" title="${safe(pushed.full)}">${safe(pushed.short)}</td><td>${yn(!!g.present)}</td><td class="github">${yn(hasGh)}</td><td>${safe(g.branch||"-")}</td><td class="visibility" title="${safe(vis)}">${safe(vis)}</td><td>${yn(hasReadmeEn(p))}</td><td>${yn(hasReadmeFr(p))}</td><td>${yn(!!d.manuel_ref_fr)}</td><td>${yn(!!d.guide_user_fr)}</td><td>${yn(!!d.ref_manual_en)}</td><td>${yn(!!d.user_guide_en)}</td><td>${yn(hasI18n(p))}</td><td>${yn(hasRel)}</td><td>${m?`<span class="warn">${m}</span>`:'<span class="yes">0</span>'}</td></tr>`;
  }).join("");
  document.getElementById("c-projects").textContent=total;
  document.getElementById("c-github").textContent=`${ghc}/${total}`;
@@ -303,7 +321,7 @@ function render(data){
  document.getElementById("c-changes").textContent=chg;
  document.getElementById("app-version").textContent=data.version||"";
  document.getElementById("meta").textContent=`Racine : ${data.root||""}`;
- document.getElementById("content").innerHTML=`<table><colgroup><col class="project-col"><col class="data-col" span="13"></colgroup><thead><tr><th>Projet</th><th>Version</th><th>Git</th><th>GitHub</th><th>Branche</th><th>Visib.</th><th>README En</th><th>README Fr</th><th>RF Fr</th><th>UG Fr</th><th>RF En</th><th>UG En</th><th>Release</th><th>Modifs</th></tr></thead><tbody>${rows}</tbody></table>`;
+ document.getElementById("content").innerHTML=`<table><colgroup><col class="project-col"><col class="data-col"><col class="date-col"><col class="data-col" span="13"></colgroup><thead><tr><th>Projet</th><th>Version</th><th>Date</th><th>Git</th><th>GitHub</th><th>Branche</th><th>Visib.</th><th>README En</th><th>README Fr</th><th>RF Fr</th><th>UG Fr</th><th>RF En</th><th>UG En</th><th>i18n</th><th>Release</th><th>Modifs</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 async function loadReport(force=false){
   if(scanInProgress) return;

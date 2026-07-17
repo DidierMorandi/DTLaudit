@@ -215,6 +215,7 @@ class GitHubInfo:
     url: str | None = None
     visibility: str | None = None
     default_branch: str | None = None
+    pushed_at: str | None = None
     latest_release: str | None = None
     open_prs: int | None = None
     open_issues: int | None = None
@@ -458,7 +459,7 @@ def collect_github(project: Path, git: GitInfo, enabled: bool) -> GitHubInfo:
     base_cmd.extend(
         [
             "--json",
-            "nameWithOwner,url,visibility,defaultBranchRef",
+            "nameWithOwner,url,visibility,defaultBranchRef,pushedAt",
         ]
     )
 
@@ -479,6 +480,7 @@ def collect_github(project: Path, git: GitInfo, enabled: bool) -> GitHubInfo:
     info.visibility = data.get("visibility")
     branch = data.get("defaultBranchRef") or {}
     info.default_branch = branch.get("name")
+    info.pushed_at = data.get("pushedAt")
 
     release_cmd = ["gh", "release", "list", "--limit", "1", "--json", "tagName"]
     if slug:
