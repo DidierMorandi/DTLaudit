@@ -293,6 +293,12 @@ function hasI18n(p){
 
  const candidates=files.filter(path=>!excluded(path));
 
+ // Module i18n directement dans le nom du fichier :
+ // dtlaudit_i18n.py, i18n.py, messages_i18n.php, etc.
+ if(candidates.some(path =>
+   /(^|\/)[^\/]*i18n[^\/]*\.(py|php|js|ts|json|ya?ml|toml|ini|po|properties)$/.test(path)
+ )) return true;
+
  // Organisation explicite : i18n/, locales/, lang/, translations/, etc.
  if(candidates.some(path =>
    /(^|\/)(i18n|l10n|locale|locales|lang|langs|language|languages|translation|translations)(\/|$)/.test(path)
