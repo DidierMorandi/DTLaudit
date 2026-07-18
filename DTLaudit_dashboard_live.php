@@ -283,13 +283,36 @@ function hasReadmeEn(p){return hasFile(p,["readme.md","readme_en.md"])}
 function hasReadmeFr(p){return hasFile(p,["readme_fr.md"])}
 function hasReadme(p){return hasReadmeEn(p)||hasReadmeFr(p)}
 function hasI18n(p){
- return (p.files||[]).some(e=>{
-  const path=String(e.path||"").toLowerCase();
-  return e.kind==="file" &&
-   /i18n/.test(path) &&
-   !/(^|\/)(__pycache__|build|dist|tests?)(\/|$)/.test(path) &&
-   !/(backup|audit|conversion|migration|retired|\.pyc$)/.test(path);
- });
+ const files=(p.files||[])
+  .filter(e=>e.kind==="file")
+  .map(e=>String(e.path||"").replaceAll("\\","/").toLowerCase());
+
+ const excluded=path =>
+  /(^|\/)(__pycache__|build|dist|tests?|backup|archive|retired)(\/|$)/.test(path) ||
+  /\.pyc$/.test(path);
+
+ const candidates=files.filter(path=>!excluded(path));
+
+ // Organisation explicite : i18n/, locales/, lang/, translations/, etc.
+ if(candidates.some(path =>
+   /(^|\/)(i18n|l10n|locale|locales|lang|langs|language|languages|translation|translations)(\/|$)/.test(path)
+ )) return true;
+
+ // Catalogues de langues courants : fr.json, en.json, messages_fr.json,
+ // strings.en.json, fr_FR.yaml, etc. Les README et documents sont exclus.
+ const languageCatalogues=candidates.filter(path =>
+  !/(^|\/)(readme|docs?|manual|manuel|guide)[^/]*\.(md|txt|pdf|docx?)$/.test(path) &&
+  /(^|\/)(?:[a-z0-9_.-]+[._-])?(fr|en)(?:[_-](fr|gb|us))?\.(json|ya?ml|toml|ini|po|mo|properties|py|php|js|ts)$/.test(path)
+ );
+
+ const hasFrench=languageCatalogues.some(path =>
+  /(^|\/)(?:[a-z0-9_.-]+[._-])?fr(?:[_-]fr)?\./.test(path)
+ );
+ const hasEnglish=languageCatalogues.some(path =>
+  /(^|\/)(?:[a-z0-9_.-]+[._-])?en(?:[_-](gb|us))?\./.test(path)
+ );
+
+ return hasFrench && hasEnglish;
 }
 function docCount(p){const d=p.doc_audit||{};return ["manuel_ref_fr","guide_user_fr","ref_manual_en","user_guide_en"].filter(k=>!!d[k]).length}
 function toolVersion(p){return p.tool_version||p.display_version||p.version||p.dtl_version?.display_version||p.dtl_version?.version||"-"}
