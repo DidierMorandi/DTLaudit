@@ -97,7 +97,11 @@ Relative output paths are resolved from the DTLaudit directory.
 --txt [PATH]         Alias for --text.
 --html [PATH]        Write an HTML report. Enabled by default.
 --no-github          Do not query GitHub through the gh CLI.
+--lang {fr,en}       Select the interface and report language.
 ```
+
+French is used by default. The language can also be set with the
+`DTL_LANGUAGE=fr` or `DTL_LANGUAGE=en` environment variable.
 
 `--project` and `--suite` are mutually exclusive. One of them is required in
 command-line mode; with no arguments, the interactive console menu is used.

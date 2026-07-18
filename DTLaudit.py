@@ -21,6 +21,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from dtlaudit_i18n import SUPPORTED_LANGUAGES, get_language, set_language, t
+
 
 def application_dir() -> Path:
     if getattr(sys, "frozen", False):
@@ -29,10 +31,8 @@ def application_dir() -> Path:
 
 
 APP_NAME = "DTLaudit"
-VERSION = "v1.1-0"
-APP_SUITE = "Un outil de la suite NetDTL"
+VERSION = "v1.1-1"
 APP_WEBSITE = "www.netdtl.com"
-APP_SUBTITLE = "Audit comparatif de projets en lecture seule"
 LOGO_LINES = (
     "┌─┬─┬─┬─┬─┬─┐",
     "│N│e│t│D│T│L│",
@@ -111,7 +111,7 @@ def styled(text: str, ansi_code: str, color: bool | None = None) -> str:
 
 
 def brand_header_lines(screen_width: int, color: bool = False) -> list[str]:
-    left = (f"{APP_NAME} {VERSION}", APP_SUITE, APP_WEBSITE)
+    left = (f"{APP_NAME} {VERSION}", t("app.suite"), APP_WEBSITE)
     gap = 3
     logo_width = len(LOGO_LINES[0])
     left_width = max(0, screen_width - logo_width - gap)
@@ -126,7 +126,7 @@ def brand_header_lines(screen_width: int, color: bool = False) -> list[str]:
         )
         visible_logo = f"{ANSI_LOGO}{logo}{ANSI_RESET}" if color else logo
         result.append(f"{visible_text}{' ' * gap}{visible_logo}")
-    result.extend(("", APP_SUBTITLE, "", "=" * screen_width))
+    result.extend(("", t("app.subtitle"), "", "=" * screen_width))
     return result
 
 
@@ -140,11 +140,11 @@ def validated_choice(prompt: str, choices: set[str]) -> str:
         value = input(prompt).strip().upper()
         if value in choices:
             return value
-        print(styled("Choix invalide. Saisissez une option proposée.", ANSI_RED))
+        print(styled(t("common.invalid_choice"), ANSI_RED))
 
 
 def ask_yes_no(prompt: str, default: bool = True) -> bool:
-    suffix = "O/n" if default else "o/N"
+    suffix = t("common.yes_no_default_yes") if default else t("common.yes_no_default_no")
     while True:
         value = input(f"{prompt} [{suffix}] : ").strip().casefold()
         if not value:
@@ -153,7 +153,7 @@ def ask_yes_no(prompt: str, default: bool = True) -> bool:
             return True
         if value in {"n", "non", "no"}:
             return False
-        print(styled("Réponse invalide. Saisissez O ou N.", ANSI_RED))
+        print(styled(t("common.invalid_yes_no"), ANSI_RED))
 
 
 def console_message(code: str, message: str, *, stream: Any | None = None) -> None:
@@ -294,26 +294,26 @@ def run_command(args: list[str], cwd: Path, timeout: int = 12) -> tuple[int, str
     except FileNotFoundError:
         console_message(
             "%DTLaudit-E-CMDNOTFOUND",
-            f"commande introuvable : {args[0]}",
+            t("error.command_not_found", command=args[0]),
         )
-        console_detail(f"Répertoire courant : {cwd}")
-        console_detail(f"Commande : {label}")
+        console_detail(t("error.cwd", path=cwd))
+        console_detail(t("error.command", command=label))
         return 1, ""
     except subprocess.TimeoutExpired:
         console_message(
             "%DTLaudit-E-CMDTIMEOUT",
-            f"délai dépassé après {timeout} secondes",
+            t("error.command_timeout", seconds=timeout),
         )
-        console_detail(f"Répertoire courant : {cwd}")
-        console_detail(f"Commande : {label}")
+        console_detail(t("error.cwd", path=cwd))
+        console_detail(t("error.command", command=label))
         return 1, ""
     except OSError as exc:
         console_message(
             "%DTLaudit-E-CMDERROR",
-            "impossible de lancer une commande externe",
+            t("error.command_launch"),
         )
-        console_detail(f"Répertoire courant : {cwd}")
-        console_detail(f"Commande : {label}")
+        console_detail(t("error.cwd", path=cwd))
+        console_detail(t("error.command", command=label))
         console_detail(str(exc))
         return 1, ""
 
@@ -323,10 +323,10 @@ def run_command(args: list[str], cwd: Path, timeout: int = 12) -> tuple[int, str
     if completed.returncode != 0:
         console_message(
             "%DTLaudit-W-CMDFAILED",
-            f"commande terminée avec le code {completed.returncode}",
+            t("error.command_failed", code=completed.returncode),
         )
-        console_detail(f"Répertoire courant : {cwd}")
-        console_detail(f"Commande : {label}")
+        console_detail(t("error.cwd", path=cwd))
+        console_detail(t("error.command", command=label))
         if stderr:
             for line in stderr.splitlines():
                 console_detail(line)
@@ -334,7 +334,7 @@ def run_command(args: list[str], cwd: Path, timeout: int = 12) -> tuple[int, str
             for line in stdout.splitlines()[:12]:
                 console_detail(line)
         else:
-            console_detail("Aucun message retourné par la commande.")
+            console_detail(t("error.no_command_output"))
 
         # Important : ne pas retourner stderr ici.
         # Les collecteurs testent le code retour et doivent garder un champ vide en cas d'échec.
@@ -446,10 +446,10 @@ def repo_slug_from_remote(remote: str | None) -> str | None:
 def collect_github(project: Path, git: GitInfo, enabled: bool) -> GitHubInfo:
     info = GitHubInfo(checked=enabled)
     if not enabled:
-        info.note = "non interrogé"
+        info.note = t("github.not_queried")
         return info
     if shutil.which("gh") is None:
-        info.note = "commande gh non disponible"
+        info.note = t("github.gh_unavailable")
         return info
 
     slug = repo_slug_from_remote(git.remote)
@@ -465,13 +465,13 @@ def collect_github(project: Path, git: GitInfo, enabled: bool) -> GitHubInfo:
 
     code, output = run_command(base_cmd, project, timeout=20)
     if code != 0 or not output:
-        info.note = "dépôt GitHub non détecté"
+        info.note = t("github.repo_not_detected")
         return info
 
     try:
         data = json.loads(output)
     except json.JSONDecodeError:
-        info.note = "réponse GitHub non lisible"
+        info.note = t("github.unreadable_response")
         return info
 
     info.available = True
@@ -590,23 +590,24 @@ def scan_project(project: Path, github_enabled: bool) -> ProjectReport:
 
 
 def present_absent(value: bool) -> str:
-    return "présent" if value else "absent"
+    return t("common.present") if value else t("common.absent")
 
 
 def yes_no(value: bool) -> str:
-    return "oui" if value else "non"
+    return t("common.yes") if value else t("common.no")
 
 
 def size_label(size: int) -> str:
     if size >= 1024 * 1024:
-        return f"{size / (1024 * 1024):.1f} Mo"
+        return f"{size / (1024 * 1024):.1f} {t('unit.mb')}"
     if size >= 1024:
-        return f"{size / 1024:.1f} Ko"
-    return f"{size} o"
+        return f"{size / 1024:.1f} {t('unit.kb')}"
+    return f"{size} {t('unit.byte')}"
 
 
 def project_count_label(count: int) -> str:
-    return f"{count} projet" if count == 1 else f"{count} projets"
+    key = "count.project.one" if count == 1 else "count.project.other"
+    return t(key, count=count)
 
 
 def project_has_file(project: ProjectReport, filenames: set[str]) -> bool:
@@ -628,95 +629,111 @@ def project_has_readme(project: ProjectReport) -> bool:
     return project_has_readme_en(project) or project_has_readme_fr(project)
  
 def oui_non(value: bool) -> str:
-    return "Oui" if value else "Non"
+    return t("common.yes_cap") if value else t("common.no_cap")
 
 
 def visibility_label(value: str | None) -> str:
     normalized = (value or "").strip().lower()
     if normalized == "public":
-        return "public"
+        return t("common.public")
     if normalized in {"private", "internal"}:
-        return "privé"
+        return t("common.private")
     return "-"
 
 
 def print_summary_table(projects: list[ProjectReport]) -> None:
+    columns = [
+        ("project", t("label.project")),
+        ("version", t("label.version")),
+        ("git", "Git"),
+        ("github", "GitHub"),
+        ("branch", t("label.branch")),
+        ("visibility", t("label.visibility_short")),
+        ("readme_en", "README En"),
+        ("readme_fr", "README Fr"),
+        ("rf_fr", "RF Fr"),
+        ("ug_fr", "UG Fr"),
+        ("rf_en", "RF En"),
+        ("ug_en", "UG En"),
+        ("release", "Release"),
+        ("changes", t("label.changes")),
+    ]
     rows = []
     for project in sorted(projects, key=lambda item: item.name.lower()):
         rows.append(
             {
-                "Projet":   project.name,
-                "Version":  project.tool_version or "-",
-                "Git":      oui_non(project.git.present),
-                "GitHub":   oui_non(project.git.remote_github or project.github.available),
-                "Branche":  project.git.branch or "-",
-                "Visib.":   visibility_label(project.github.visibility),
-                "README En": oui_non(project_has_readme_en(project)),
-                "README Fr": oui_non(project_has_readme_fr(project)),
-                "RF Fr":    oui_non(project.doc_audit.manuel_ref_fr),
-                "UG Fr":    oui_non(project.doc_audit.guide_user_fr),
-                "RF En":    oui_non(project.doc_audit.ref_manual_en),
-                "UG En":    oui_non(project.doc_audit.user_guide_en),
-                "Release":  oui_non(bool(project.github.latest_release)),
-                "Modifs":   str(project.git.changed_files or 0),
+                "project": project.name,
+                "version": project.tool_version or "-",
+                "git": oui_non(project.git.present),
+                "github": oui_non(project.git.remote_github or project.github.available),
+                "branch": project.git.branch or "-",
+                "visibility": visibility_label(project.github.visibility),
+                "readme_en": oui_non(project_has_readme_en(project)),
+                "readme_fr": oui_non(project_has_readme_fr(project)),
+                "rf_fr": oui_non(project.doc_audit.manuel_ref_fr),
+                "ug_fr": oui_non(project.doc_audit.guide_user_fr),
+                "rf_en": oui_non(project.doc_audit.ref_manual_en),
+                "ug_en": oui_non(project.doc_audit.user_guide_en),
+                "release": oui_non(bool(project.github.latest_release)),
+                "changes": str(project.git.changed_files or 0),
             }
         )
 
-    columns = ["Projet", "Version", "Git", "GitHub", "Branche", "Visib.", "README En", "README Fr", "RF Fr", "UG Fr", "RF En", "UG En", "Release", "Modifs"]
     widths = {
-        column: max(len(column), *(len(row[column]) for row in rows)) if rows else len(column)
-        for column in columns
+        key: max(len(label), *(len(row[key]) for row in rows)) if rows else len(label)
+        for key, label in columns
     }
 
-    print("Synthèse")
-    print("========")
-    print("  ".join(column.ljust(widths[column]) for column in columns))
-    print("  ".join("-" * widths[column] for column in columns))
+    heading = t("label.summary")
+    print(heading)
+    print("=" * len(heading))
+    print("  ".join(label.ljust(widths[key]) for key, label in columns))
+    print("  ".join("-" * widths[key] for key, _ in columns))
     for row in rows:
-        print("  ".join(row[column].ljust(widths[column]) for column in columns))
+        print("  ".join(row[key].ljust(widths[key]) for key, _ in columns))
     print()
 
 
 def print_project_block(project: ProjectReport) -> None:
     print(project.name)
     print("-" * len(project.name))
-    print("Version :")
-    print(f"    {project.tool_version or 'non détectée'}")
+    print(f"{t('label.version')} :")
+    print(f"    {project.tool_version or t('common.not_detected_f')}")
     print("README :")
-    print(f"    anglais : {present_absent(project_has_readme_en(project))}")
-    print(f"    français : {present_absent(project_has_readme_fr(project))}")
-    print("Documentation normative :")
+    print(f"    {t('label.english')} : {present_absent(project_has_readme_en(project))}")
+    print(f"    {t('label.french')} : {present_absent(project_has_readme_fr(project))}")
+    print(f"{t('label.normative_docs')} :")
     doc_labels = {
-        "manuel_ref_fr": "Manuel de référence (FR)",
-        "guide_user_fr": "Guide utilisateur (FR)",
-        "ref_manual_en": "Reference Manual (EN)",
-        "user_guide_en": "User Guide (EN)",
+        "manuel_ref_fr": t("doc.reference_fr"),
+        "guide_user_fr": t("doc.user_guide_fr"),
+        "ref_manual_en": t("doc.reference_en"),
+        "user_guide_en": t("doc.user_guide_en"),
     }
     for key, label in doc_labels.items():
         status = present_absent(getattr(project.doc_audit, key))
         print(f"    {label} : {status}")
-    complete = "complète" if project.doc_audit.all_present() else f"{project.doc_audit.count_present()}/{len(DOC_NORM_ITEMS)} présents"
-    print(f"    Bilan : {complete}")
+    complete = t("common.complete") if project.doc_audit.all_present() else t("report.complete_count", count=project.doc_audit.count_present(), total=len(DOC_NORM_ITEMS))
+    print(f"    {t('label.assessment')} : {complete}")
     print("Git :")
     print(f"    {present_absent(project.git.present)}")
     if project.git.present:
-        print("Branche :")
-        print(f"    {project.git.branch or 'non détectée'}")
+        print(f"{t('label.branch')} :")
+        print(f"    {project.git.branch or t('common.not_detected_f')}")
         print("Remote GitHub :")
         print(f"    {present_absent(project.git.remote_github)}")
-        print("Modifications locales :")
+        print(f"{t('label.local_changes')} :")
         print(f"    {project.git.changed_files or 0}")
         print("Tags :")
         print(f"    {project.git.tags_count or 0}")
     print("GitHub :")
     if project.github.available:
-        print(f"    dépôt : {project.github.repository or 'non détecté'}")
-        print(f"    visibilité : {project.github.visibility or 'non détectée'}")
-        print(f"    release récente : {project.github.latest_release or 'absente'}")
-        print(f"    pull requests ouvertes : {project.github.open_prs if project.github.open_prs is not None else 'non détectées'}")
-        print(f"    issues ouvertes : {project.github.open_issues if project.github.open_issues is not None else 'non détectées'}")
+        print(f"    {t('label.repository').casefold()} : {project.github.repository or t('common.not_detected')}")
+        print(f"    {t('label.visibility').casefold()} : {project.github.visibility or t('common.not_detected_f')}")
+        print(f"    {t('label.recent_release').casefold()} : {project.github.latest_release or t('common.none_f')}")
+        print(f"    {t('label.open_prs').casefold()} : {project.github.open_prs if project.github.open_prs is not None else t('common.not_detected_plural')}")
+        print(f"    {t('label.open_issues').casefold()} : {project.github.open_issues if project.github.open_issues is not None else t('common.not_detected_plural')}")
     else:
-        print(f"    {project.github.note or 'non disponible'}")
+        print(f"    {project.github.note or t('common.not_available')}")
     print()
 
 
@@ -733,52 +750,52 @@ def notable_observations(projects: list[ProjectReport]) -> list[str]:
     readme_en_count = count_projects(project_has_readme_en)
     readme_fr_count = count_projects(project_has_readme_fr)
     observations.append(
-        f"README est présent dans {project_count_label(readme_count)} sur {total}."
+        t("observation.readme", count=project_count_label(readme_count), total=total)
     )
     observations.append(
-        f"README anglais est présent dans {project_count_label(readme_en_count)} sur {total}."
+        t("observation.readme_en", count=project_count_label(readme_en_count), total=total)
     )
     observations.append(
-        f"README français est présent dans {project_count_label(readme_fr_count)} sur {total}."
+        t("observation.readme_fr", count=project_count_label(readme_fr_count), total=total)
     )
 
     # Contrôle normatif documentation
     full_doc_count = count_projects(lambda project: project.doc_audit.all_present())
     observations.append(
-        f"Documentation normative complète (4/4) dans {project_count_label(full_doc_count)} sur {total}."
+        t("observation.docs_complete", count=project_count_label(full_doc_count), total=total)
     )
     doc_labels = {
-        "manuel_ref_fr": "Manuel de référence (FR)",
-        "guide_user_fr": "Guide utilisateur (FR)",
-        "ref_manual_en": "Reference Manual (EN)",
-        "user_guide_en": "User Guide (EN)",
+        "manuel_ref_fr": t("doc.reference_fr"),
+        "guide_user_fr": t("doc.user_guide_fr"),
+        "ref_manual_en": t("doc.reference_en"),
+        "user_guide_en": t("doc.user_guide_en"),
     }
     for key, label in doc_labels.items():
         missing = [p.name for p in projects if not getattr(p.doc_audit, key)]
         if missing:
             observations.append(
-                f"{label} manquant dans : {', '.join(missing)}."
+                t("observation.doc_missing", label=label, projects=", ".join(missing))
             )
 
     git_count = count_projects(lambda project: project.git.present)
     observations.append(
-        f"Git est présent dans {project_count_label(git_count)} sur {total}."
+        t("observation.git", count=project_count_label(git_count), total=total)
     )
 
     github_remote_count = count_projects(lambda project: project.git.remote_github)
     observations.append(
-        f"Remote GitHub est présent dans {project_count_label(github_remote_count)} sur {total}."
+        t("observation.github_remote", count=project_count_label(github_remote_count), total=total)
     )
 
     github_available_count = count_projects(lambda project: project.github.available)
     observations.append(
-        f"Status GitHub disponible dans {project_count_label(github_available_count)} sur {total}."
+        t("observation.github_status", count=project_count_label(github_available_count), total=total)
     )
 
     branch_counts = Counter(project.git.branch for project in projects if project.git.branch)
     for branch, count in branch_counts.most_common():
         observations.append(
-            f"Branche {branch} observée dans {project_count_label(count)} sur {total}."
+            t("observation.branch", branch=branch, count=project_count_label(count), total=total)
         )
 
     path_projects: dict[str, set[str]] = defaultdict(set)
@@ -795,7 +812,7 @@ def notable_observations(projects: list[ProjectReport]) -> list[str]:
         by_project: dict[str, int] = Counter(unique_files.values())
         for project_name, count in by_project.most_common():
             observations.append(
-                f"{count} fichiers sont présents uniquement dans {project_name}."
+                t("observation.unique_files", count=count, project=project_name)
             )
 
     generated_by_project: dict[str, list[str]] = {}
@@ -809,7 +826,7 @@ def notable_observations(projects: list[ProjectReport]) -> list[str]:
             generated_by_project[project.name] = generated
     for project_name, names in generated_by_project.items():
         observations.append(
-            f"Répertoires générés observés dans {project_name} : {', '.join(names)}"
+            t("observation.generated_dirs", project=project_name, names=", ".join(names))
         )
 
     large_files: list[tuple[str, str, int]] = []
@@ -819,7 +836,7 @@ def notable_observations(projects: list[ProjectReport]) -> list[str]:
                 large_files.append((project.name, entry.path, entry.size))
     for project_name, path, size in sorted(large_files, key=lambda item: item[2], reverse=True):
         observations.append(
-            f"Fichier volumineux observé dans {project_name} : {path} ({size_label(size)})"
+            t("observation.large_file", project=project_name, path=path, size=size_label(size))
         )
 
     return observations
@@ -843,36 +860,39 @@ def print_file_matrix(projects: list[ProjectReport]) -> None:
         if 1 < len(names) < total
     )
 
-    print("Fichiers et répertoires observés")
-    print("================================")
+    heading = t("label.files_observed")
+    print(heading)
+    print("=" * len(heading))
     if rare:
         print()
-        print("Présents dans un seul projet")
-        print("----------------------------")
+        subheading = t("label.single_project_items")
+        print(subheading)
+        print("-" * len(subheading))
         for path, names in rare[:40]:
             print(f"{next(iter(names))} : {path}")
         if len(rare) > 40:
-            print(f"... {len(rare) - 40} autres éléments")
+            print(t("count.items.more", count=len(rare) - 40))
 
     if frequent:
         print()
-        print("Présents dans plusieurs projets, mais pas tous")
-        print("----------------------------------------------")
+        subheading = t("label.some_project_items")
+        print(subheading)
+        print("-" * len(subheading))
         for path, names in frequent[:40]:
             names_label = ", ".join(sorted(names))
-            print(f"{path} : {len(names)} projets ({names_label})")
+            print(f"{path} : {t('report.projects_in_path', count=len(names), names=names_label)}")
         if len(frequent) > 40:
-            print(f"... {len(frequent) - 40} autres éléments")
+            print(t("count.items.more", count=len(frequent) - 40))
     print()
 
 
 def print_report(projects: list[ProjectReport], root: Path) -> None:
     print(f"DTLaudit {VERSION}")
-    print("Rapport comparatif entre projets")
-    print("Aucune modification effectuée")
+    print(t("report.comparative"))
+    print(t("report.read_only"))
     print()
-    print(f"Racine : {root}")
-    print(f"Projets scannés : {len(projects)}")
+    print(f"{t('label.root')} : {root}")
+    print(f"{t('label.scanned_projects')} : {len(projects)}")
     print()
 
     print_summary_table(projects)
@@ -880,8 +900,9 @@ def print_report(projects: list[ProjectReport], root: Path) -> None:
     for project in projects:
         print_project_block(project)
 
-    print("Observations remarquables")
-    print("=========================")
+    heading = t("label.notable_observations")
+    print(heading)
+    print("=" * len(heading))
     for observation in notable_observations(projects):
         print(f"- {observation}")
     print()
@@ -905,8 +926,8 @@ def _yn_cell(value: bool, css_class: str = "") -> str:
     """Cellule <td> Oui/Non colorée."""
     class_suffix = f" {css_class}" if css_class else ""
     if value:
-        return f'<td class="yn-yes{class_suffix}">Oui</td>'
-    return f'<td class="yn-no{class_suffix}">Non</td>'
+        return f'<td class="yn-yes{class_suffix}">{_h(t("common.yes_cap"))}</td>'
+    return f'<td class="yn-no{class_suffix}">{_h(t("common.no_cap"))}</td>'
 
 
 def _html_summary_table(projects: list[ProjectReport]) -> str:
@@ -933,8 +954,8 @@ def _html_summary_table(projects: list[ProjectReport]) -> str:
             f"<td>{g.changed_files or 0}</td>"
             f"</tr>"
         )
-    headers = ["Projet", "Version", "Git", "GitHub", "Branche", "Visib.", "README En", "README Fr", "RF Fr", "UG Fr", "RF En", "UG En", "Release", "Modifs"]
-    thead = "".join(f"<th>{h}</th>" for h in headers)
+    headers = [t("label.project"), t("label.version"), "Git", "GitHub", t("label.branch"), t("label.visibility_short"), "README En", "README Fr", "RF Fr", "UG Fr", "RF En", "UG En", "Release", t("label.changes")]
+    thead = "".join(f"<th>{_h(header)}</th>" for header in headers)
     colgroup = '<colgroup><col class="project-col"><col class="data-col" span="13"></colgroup>'
     tbody = "\n".join(rows)
     return f"<table>\n{colgroup}\n<thead><tr>{thead}</tr></thead>\n<tbody>\n{tbody}\n</tbody>\n</table>"
@@ -943,10 +964,10 @@ def _html_summary_table(projects: list[ProjectReport]) -> str:
 def _html_project_blocks(projects: list[ProjectReport]) -> str:
     blocks = []
     doc_fields = [
-        ("manuel_ref_fr", "Manuel de référence (FR)"),
-        ("guide_user_fr", "Guide utilisateur (FR)"),
-        ("ref_manual_en", "Reference Manual (EN)"),
-        ("user_guide_en", "User Guide (EN)"),
+        ("manuel_ref_fr", t("doc.reference_fr")),
+        ("guide_user_fr", t("doc.user_guide_fr")),
+        ("ref_manual_en", t("doc.reference_en")),
+        ("user_guide_en", t("doc.user_guide_en")),
     ]
     for project in projects:
         g = project.git
@@ -957,44 +978,44 @@ def _html_project_blocks(projects: list[ProjectReport]) -> str:
         for key, label in doc_fields:
             doc_rows += f"<tr><td class='lbl'>{_h(label)}</td>{_yn_cell(getattr(da, key))}</tr>\n"
 
-        bilan = "complète" if da.all_present() else f"{da.count_present()}/{len(DOC_NORM_ITEMS)} présents"
+        bilan = t("common.complete") if da.all_present() else t("report.complete_count", count=da.count_present(), total=len(DOC_NORM_ITEMS))
 
-        git_rows = f"<tr><td class='lbl'>Présent</td>{_yn_cell(g.present)}</tr>\n"
+        git_rows = f"<tr><td class='lbl'>{_h(t('common.present').capitalize())}</td>{_yn_cell(g.present)}</tr>\n"
         if g.present:
             git_rows += (
-                f"<tr><td class='lbl'>Branche</td><td>{_h(g.branch or 'non détectée')}</td></tr>\n"
+                f"<tr><td class='lbl'>{_h(t('label.branch'))}</td><td>{_h(g.branch or t('common.not_detected_f'))}</td></tr>\n"
                 f"<tr><td class='lbl'>Remote GitHub</td>{_yn_cell(g.remote_github)}</tr>\n"
-                f"<tr><td class='lbl'>Modifications locales</td><td>{g.changed_files or 0}</td></tr>\n"
+                f"<tr><td class='lbl'>{_h(t('label.local_changes'))}</td><td>{g.changed_files or 0}</td></tr>\n"
                 f"<tr><td class='lbl'>Tags</td><td>{g.tags_count or 0}</td></tr>\n"
             )
 
         if gh.available:
             gh_rows = (
-                f"<tr><td class='lbl'>Dépôt</td><td>{_h(gh.repository or 'non détecté')}</td></tr>\n"
-                f"<tr><td class='lbl'>Visibilité</td><td>{_h(gh.visibility or 'non détectée')}</td></tr>\n"
-                f"<tr><td class='lbl'>Release récente</td><td>{_h(gh.latest_release or 'absente')}</td></tr>\n"
-                f"<tr><td class='lbl'>Pull requests ouvertes</td><td>{gh.open_prs if gh.open_prs is not None else 'non détectées'}</td></tr>\n"
-                f"<tr><td class='lbl'>Issues ouvertes</td><td>{gh.open_issues if gh.open_issues is not None else 'non détectées'}</td></tr>\n"
+                f"<tr><td class='lbl'>{_h(t('label.repository'))}</td><td>{_h(gh.repository or t('common.not_detected'))}</td></tr>\n"
+                f"<tr><td class='lbl'>{_h(t('label.visibility'))}</td><td>{_h(gh.visibility or t('common.not_detected_f'))}</td></tr>\n"
+                f"<tr><td class='lbl'>{_h(t('label.recent_release'))}</td><td>{_h(gh.latest_release or t('common.none_f'))}</td></tr>\n"
+                f"<tr><td class='lbl'>{_h(t('label.open_prs'))}</td><td>{gh.open_prs if gh.open_prs is not None else _h(t('common.not_detected_plural'))}</td></tr>\n"
+                f"<tr><td class='lbl'>{_h(t('label.open_issues'))}</td><td>{gh.open_issues if gh.open_issues is not None else _h(t('common.not_detected_plural'))}</td></tr>\n"
             )
         else:
-            gh_rows = f"<tr><td class='lbl'>Statut</td><td>{_h(gh.note or 'non disponible')}</td></tr>\n"
+            gh_rows = f"<tr><td class='lbl'>{_h(t('label.status'))}</td><td>{_h(gh.note or t('common.not_available'))}</td></tr>\n"
 
         blocks.append(f"""
 <div class="project-block">
   <h2>{_h(project.name)}</h2>
-  <h3>Version</h3>
+  <h3>{_h(t("label.version"))}</h3>
   <table class="inner">
-    <tr><td class='lbl'>Version outil</td><td>{_h(project.tool_version or 'non détectée')}</td></tr>
+    <tr><td class='lbl'>{_h(t("label.tool_version"))}</td><td>{_h(project.tool_version or t("common.not_detected_f"))}</td></tr>
   </table>
   <h3>README</h3>
   <table class="inner">
-    <tr><td class='lbl'>Anglais</td>{_yn_cell(project_has_readme_en(project))}</tr>
-    <tr><td class='lbl'>Français</td>{_yn_cell(project_has_readme_fr(project))}</tr>
+    <tr><td class='lbl'>{_h(t("label.english_cap"))}</td>{_yn_cell(project_has_readme_en(project))}</tr>
+    <tr><td class='lbl'>{_h(t("label.french_cap"))}</td>{_yn_cell(project_has_readme_fr(project))}</tr>
   </table>
-  <h3>Documentation normative</h3>
+  <h3>{_h(t("label.normative_docs"))}</h3>
   <table class="inner">
     {doc_rows}
-    <tr><td class='lbl'>Bilan</td><td>{_h(bilan)}</td></tr>
+    <tr><td class='lbl'>{_h(t("label.assessment"))}</td><td>{_h(bilan)}</td></tr>
   </table>
   <h3>Git</h3>
   <table class="inner">
@@ -1011,7 +1032,7 @@ def _html_project_blocks(projects: list[ProjectReport]) -> str:
 def _html_observations(projects: list[ProjectReport]) -> str:
     items = notable_observations(projects)
     if not items:
-        return "<p>Aucune observation.</p>"
+        return f"<p>{_h(t('report.no_observation'))}</p>"
     lis = "\n".join(f"<li>{_h(obs)}</li>" for obs in items)
     return f"<ul>\n{lis}\n</ul>"
 
@@ -1032,8 +1053,8 @@ def _html_file_matrix(projects: list[ProjectReport]) -> str:
         for path, names in rare[:40]:
             rows += f"<tr><td>{_h(next(iter(names)))}</td><td>{_h(path)}</td></tr>\n"
         if len(rare) > 40:
-            rows += f"<tr><td colspan='2' class='muted'>... {len(rare) - 40} autres éléments</td></tr>\n"
-        sections.append(f"<h3>Présents dans un seul projet</h3><table class='inner'><tr><th>Projet</th><th>Chemin</th></tr>\n{rows}</table>")
+            rows += f"<tr><td colspan='2' class='muted'>{_h(t('count.items.more', count=len(rare) - 40))}</td></tr>\n"
+        sections.append(f"<h3>{_h(t('label.single_project_items'))}</h3><table class='inner'><tr><th>{_h(t('label.project'))}</th><th>{_h(t('label.path'))}</th></tr>\n{rows}</table>")
 
     if frequent:
         rows = ""
@@ -1041,10 +1062,10 @@ def _html_file_matrix(projects: list[ProjectReport]) -> str:
             names_label = ", ".join(sorted(names))
             rows += f"<tr><td>{_h(path)}</td><td>{len(names)}</td><td>{_h(names_label)}</td></tr>\n"
         if len(frequent) > 40:
-            rows += f"<tr><td colspan='3' class='muted'>... {len(frequent) - 40} autres éléments</td></tr>\n"
-        sections.append(f"<h3>Présents dans plusieurs projets, mais pas tous</h3><table class='inner'><tr><th>Chemin</th><th>Nb</th><th>Projets</th></tr>\n{rows}</table>")
+            rows += f"<tr><td colspan='3' class='muted'>{_h(t('count.items.more', count=len(frequent) - 40))}</td></tr>\n"
+        sections.append(f"<h3>{_h(t('label.some_project_items'))}</h3><table class='inner'><tr><th>{_h(t('label.path'))}</th><th>{_h(t('label.count_short'))}</th><th>{_h(t('label.projects'))}</th></tr>\n{rows}</table>")
 
-    return "\n".join(sections) if sections else "<p>Aucun fichier à signaler.</p>"
+    return "\n".join(sections) if sections else f"<p>{_h(t('report.no_file'))}</p>"
 
 
 def build_html_report(projects: list[ProjectReport], root: Path) -> str:
@@ -1058,7 +1079,7 @@ def build_html_report(projects: list[ProjectReport], root: Path) -> str:
     file_matrix = _html_file_matrix(projects)
 
     return f"""<!doctype html>
-<html lang="fr">
+<html lang="{get_language()}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1281,34 +1302,34 @@ def build_html_report(projects: list[ProjectReport], root: Path) -> str:
 <body>
   <div class="grid-bg"></div>
   <header>
-    <p class="header-tag">DTL Projects &bull; Rapport d&rsquo;audit</p>
+    <p class="header-tag">{_h(t("report.html_tagline"))}</p>
     <h1>{_h(title)}</h1>
-    <p class="meta">Racine&nbsp;: {_h(str(root))} &bull; {len(projects)} projet(s) scann&eacute;(s) &bull; aucune modification effectu&eacute;e</p>
+    <p class="meta">{_h(t("report.html_meta", root=str(root), count=len(projects)))}</p>
   </header>
   <main>
     <section>
-      <h2>Synth&egrave;se</h2>
+      <h2>{_h(t("label.summary"))}</h2>
       {summary_table}
     </section>
 
     <section>
-      <h2>D&eacute;tail par projet</h2>
+      <h2>{_h(t("report.project_details"))}</h2>
       {project_blocks}
     </section>
 
     <section>
-      <h2>Observations remarquables</h2>
+      <h2>{_h(t("label.notable_observations"))}</h2>
       {observations}
     </section>
 
     <section>
-      <h2>Fichiers et r&eacute;pertoires observ&eacute;s</h2>
+      <h2>{_h(t("label.files_observed"))}</h2>
       {file_matrix}
     </section>
   </main>
   <footer>
     <span>{_h(title)} &mdash; {generated}</span>
-    <span>aucune modification effectu&eacute;e</span>
+    <span>{_h(t("report.read_only"))}</span>
   </footer>
 </body>
 </html>
@@ -1365,6 +1386,28 @@ def serialize(projects: list[ProjectReport], root: Path) -> dict[str, Any]:
         "observations": notable_observations(projects),
     }
 
+def localized_parser_error(message: str) -> str:
+    """Translate argparse's most common generated errors without changing options."""
+    if get_language() == "en":
+        return message
+    if message == "one of the arguments --project --suite is required":
+        return t("cli.error_target_required")
+    match = re.fullmatch(r"argument (\S+): expected one argument", message)
+    if match:
+        return t("cli.error_argument_value", argument=match.group(1))
+    match = re.fullmatch(r"argument (\S+): invalid choice: (.+) \(choose from (.+)\)", message)
+    if match:
+        return t(
+            "cli.error_invalid_choice",
+            argument=match.group(1),
+            value=match.group(2),
+            choices=match.group(3),
+        )
+    if message.startswith("unrecognized arguments: "):
+        return t("cli.error_unrecognized", arguments=message.removeprefix("unrecognized arguments: "))
+    return message
+
+
 class DTLArgumentParser(argparse.ArgumentParser):
 
     def error(self, message):
@@ -1372,27 +1415,28 @@ class DTLArgumentParser(argparse.ArgumentParser):
         print()
         print("%DTLaudit-E-SYNTAX")
         print()
-        print("ERREUR :")
-        print(f"        {message}")
+        print(t("cli.error"))
+        print(f"        {localized_parser_error(message)}")
         print()
-        print("DESCRIPTION :")
-        print("        DTLaudit compare un ou plusieurs projets et génère un rapport HTML, TXT ou JSON.")
+        print(t("cli.description"))
+        print(t("cli.description_text"))
         print()
-        print("SYNTAXE :")
-        print("        python DTLaudit --project <répertoire>")
-        print("        python DTLaudit --suite <répertoire>")
+        print(t("cli.syntax"))
+        print(t("cli.syntax_project"))
+        print(t("cli.syntax_suite"))
         print()
-        print("OPTIONS :")
-        print("        --project      Analyse un seul projet.")
-        print("        --suite        Analyse plusieurs projets.")
-        print("        --json         Génère un rapport JSON.")
-        print("        --txt          Génère un rapport texte.")
-        print("        --html         Génère un rapport HTML.")
-        print("        --no-github    N'interroge pas GitHub.")
-        print("        --debug        Affiche les informations de diagnostic.")
-        print("        --quiet        N'affiche que les erreurs et les avertissements.")
+        print(t("cli.options"))
+        print(f"        --project      {t('cli.project')}.")
+        print(f"        --suite        {t('cli.suite')}.")
+        print(f"        --json         {t('cli.json')}.")
+        print(f"        --txt          {t('cli.text')}.")
+        print(f"        --html         {t('cli.html')}.")
+        print(f"        --no-github    {t('cli.no_github')}.")
+        print(f"        --lang         {t('cli.lang')}.")
+        print(f"        --debug        {t('cli.debug')}.")
+        print(f"        --quiet        {t('cli.quiet')}.")
         print()
-        print("EXEMPLES :")
+        print(t("cli.examples"))
         print("        python DTLaudit --project C:\\MesProjets\\GitDTL")
         print("        python DTLaudit --suite C:\\MesProjets")
         print("        python DTLaudit --suite C:\\MesProjets --json --html")
@@ -1404,27 +1448,27 @@ def parse_args() -> argparse.Namespace:
     parser = DTLArgumentParser(
         description=f"DTLaudit {VERSION}",
         add_help=False,
-        usage="python dtlaudit.py (--project <projet> | --suite <répertoire>) [options]"
+        usage=t("cli.usage")
     )
     target = parser.add_mutually_exclusive_group(required=True)
     parser.add_argument(
         "-h",
         "--help",
         action="help",
-        help="Affiche cette aide et quitte"
+        help=t("cli.help")
 )
-    target.add_argument("--project", help="Analyse un projet unique")
-    target.add_argument("--suite", help="Analyse un répertoire contenant plusieurs projets")
+    target.add_argument("--project", help=t("cli.project"))
+    target.add_argument("--suite", help=t("cli.suite"))
     parser.add_argument(
         "--json",
         nargs="?",
         const=DEFAULT_JSON_REPORT,
-        help="Produire un rapport au format JSON",
+        help=t("cli.json"),
     )
     parser.add_argument(
         "--no-github",
         action="store_true",
-        help="Ne pas interroger GitHub avec gh",
+        help=t("cli.no_github"),
     )
     parser.add_argument(
         "--txt",
@@ -1432,42 +1476,48 @@ def parse_args() -> argparse.Namespace:
         dest="text",
         nargs="?",
         const=DEFAULT_TXT_REPORT,
-        help="Produire un rapport au format texte",
+        help=t("cli.text"),
     )
     parser.add_argument(
         "--html",
         nargs="?",
         const=DEFAULT_HTML_REPORT,
-        help="Produire un rapport au format HTML",
+        help=t("cli.html"),
     )
     parser.add_argument(
         "--quiet",
         action="store_true",
-        help="Ne pas afficher les messages de diagnostic console",
+        help=t("cli.quiet"),
     )
     parser.add_argument(
         "--debug",
         action="store_true",
-        help="Affiche des informations techniques détaillées en cas d'erreur inattendue",
+        help=t("cli.debug"),
+    )
+    parser.add_argument(
+        "--lang",
+        choices=SUPPORTED_LANGUAGES,
+        default=get_language(),
+        help=t("cli.lang"),
     )
     return parser.parse_args()
 
 
 def choose_start_mode() -> str:
     show_application_header()
-    print("\nChoisissez un mode :\n")
-    print("1  Auditer un dossier contenant plusieurs projets")
-    print("2  Auditer un seul projet")
-    print("Q : Quitter")
-    return validated_choice("\nVotre choix : ", {"1", "2", "Q"})
+    print(t("interactive.choose_mode"))
+    print(t("interactive.audit_suite"))
+    print(t("interactive.audit_project"))
+    print(t("interactive.quit"))
+    return validated_choice(t("interactive.choice"), {"1", "2", "Q"})
 
 
 def choose_directory(mode: str) -> Path | None:
     """Ouvre le sélecteur de dossiers natif, comme DTLi18n."""
     title = (
-        "Choisir le dossier contenant les projets"
+        t("interactive.choose_suite")
         if mode == "suite"
-        else "Choisir le dossier du projet à auditer"
+        else t("interactive.choose_project")
     )
     root = None
     try:
@@ -1481,8 +1531,8 @@ def choose_directory(mode: str) -> Path | None:
         selected = filedialog.askdirectory(parent=root, title=title, mustexist=True)
         return Path(selected).resolve() if selected else None
     except Exception as exc:
-        print(styled(f"Impossible d'ouvrir le sélecteur de dossiers : {exc}", ANSI_RED))
-        input("\nAppuyer sur <Return> pour revenir au menu principal.")
+        print(styled(t("interactive.picker_error", error=exc), ANSI_RED))
+        input(t("interactive.return"))
         return None
     finally:
         if root is not None:
@@ -1515,7 +1565,7 @@ def open_report(report_path: Path) -> None:
         else:
             subprocess.Popen(["xdg-open", str(report_path)])
     except OSError as exc:
-        print(styled(f"Impossible d'ouvrir le rapport : {exc}", ANSI_RED))
+        print(styled(t("error.open_report", error=exc), ANSI_RED))
 
 
 def run_audit(args: argparse.Namespace) -> tuple[int, Path | None]:
@@ -1527,23 +1577,23 @@ def run_audit(args: argparse.Namespace) -> tuple[int, Path | None]:
     github_enabled = not args.no_github
     html_output = args.html or DEFAULT_HTML_REPORT
 
-    console_message("%DTLaudit-I-START", f"DTLaudit {VERSION} démarre")
+    console_message("%DTLaudit-I-START", t("audit.start", version=VERSION))
 
     if args.project:
         root = Path(args.project).resolve()
         if not root.is_dir():
-            console_message("%DTLaudit-E-NOTFOUND", f"dossier introuvable : {root}")
+            console_message("%DTLaudit-E-NOTFOUND", t("audit.folder_not_found", path=root))
             return 2, None
-        console_message("%DTLaudit-I-TARGET", f"projet unique : {root}")
+        console_message("%DTLaudit-I-TARGET", t("audit.single_target", path=root))
         project_paths = [root]
     else:
         root = Path(args.suite).resolve()
         if not root.is_dir():
-            console_message("%DTLaudit-E-NOTFOUND", f"dossier introuvable : {root}")
+            console_message("%DTLaudit-E-NOTFOUND", t("audit.folder_not_found", path=root))
             return 2, None
-        console_message("%DTLaudit-I-TARGET", f"suite de projets : {root}")
+        console_message("%DTLaudit-I-TARGET", t("audit.suite_target", path=root))
         project_paths = discover_projects(root)
-        console_message("%DTLaudit-I-DISCOVER", f"{len(project_paths)} projet(s) détecté(s)")
+        console_message("%DTLaudit-I-DISCOVER", t("audit.discovered", count=len(project_paths)))
 
     projects = []
     for index, path in enumerate(project_paths, start=1):
@@ -1551,7 +1601,7 @@ def run_audit(args: argparse.Namespace) -> tuple[int, Path | None]:
         projects.append(scan_project(path, github_enabled))
 
     if not projects:
-        console_message("%DTLaudit-W-NOPROJECT", "aucun projet détecté")
+        console_message("%DTLaudit-W-NOPROJECT", t("audit.no_project"))
 
     serialized_report = serialize(projects, root)
 
@@ -1567,17 +1617,17 @@ def run_audit(args: argparse.Namespace) -> tuple[int, Path | None]:
             json_path,
             json.dumps(serialized_report, ensure_ascii=False, indent=2),
         )
-        print_if_available(f"Rapport JSON écrit : {json_path}", sys.stderr)
+        print_if_available(t("audit.json_written", path=json_path), sys.stderr)
 
     if args.text:
         txt_path = output_path(args.text, DEFAULT_OUTPUT_DIR)
         write_text_file(txt_path, text_report or build_text_report(projects, root))
-        print_if_available(f"Rapport TXT écrit : {txt_path}", sys.stderr)
+        print_if_available(t("audit.text_written", path=txt_path), sys.stderr)
 
     if html_output:
         html_path = output_path(html_output, DEFAULT_OUTPUT_DIR)
         write_text_file(html_path, build_html_report(projects, root))
-        print_if_available(f"Rapport HTML écrit : {html_path}", sys.stderr)
+        print_if_available(t("audit.html_written", path=html_path), sys.stderr)
 
     copy_json_to_xampp(serialized_report, json_path)
 
@@ -1585,7 +1635,7 @@ def run_audit(args: argparse.Namespace) -> tuple[int, Path | None]:
         text_report if text_report is not None else build_text_report(projects, root),
         end="",
     )
-    console_message("%DTLaudit-I-DONE", "audit terminé")
+    console_message("%DTLaudit-I-DONE", t("audit.done"))
     return 0, html_path
 
 
@@ -1600,22 +1650,30 @@ def run_interactive() -> int:
             continue
 
         show_application_header()
-        print(f"\nDossier : {styled(str(path), ANSI_GREEN)}")
-        print("L'audit démarre. Aucun fichier du projet ne sera modifié.\n")
+        print(f"\n{t('interactive.folder')} : {styled(str(path), ANSI_GREEN)}")
+        print(t("interactive.audit_start"))
         code, report_path = run_audit(interactive_args(mode, path))
 
         if code == 0 and report_path is not None:
-            print(f"\nRapport HTML : {styled(str(report_path), ANSI_GREEN)}")
-            if ask_yes_no("Ouvrir le rapport maintenant ?", True):
+            print(f"\n{t('interactive.html_report')} : {styled(str(report_path), ANSI_GREEN)}")
+            if ask_yes_no(t("interactive.open_report"), True):
                 open_report(report_path)
-        input("\nAppuyer sur <Return> pour revenir au menu principal.")
+        input(t("interactive.return"))
 
 
 def main() -> int:
     configure_console_streams()
+    for index, argument in enumerate(sys.argv[1:]):
+        if argument.startswith("--lang="):
+            set_language(argument.partition("=")[2])
+            break
+        if argument == "--lang" and index + 2 <= len(sys.argv) - 1:
+            set_language(sys.argv[index + 2])
+            break
     if len(sys.argv) == 1:
         return run_interactive()
     args = parse_args()
+    set_language(args.lang)
     code, _ = run_audit(args)
     return code
 
@@ -1624,13 +1682,13 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except KeyboardInterrupt:
-        console_message("%DTLaudit-F-ABORT", "interruption par l'utilisateur")
+        console_message("%DTLaudit-F-ABORT", t("audit.interrupted"))
         raise SystemExit(130)
     except Exception as exc:
-        console_message("%DTLaudit-F-ABORT", "erreur Python inattendue")
+        console_message("%DTLaudit-F-ABORT", t("audit.unexpected_error"))
         console_detail(str(exc))
         if DEBUG:
             traceback.print_exc()
         else:
-            console_detail("Relancer avec --debug pour afficher la pile Python complète.")
+            console_detail(t("audit.debug_hint"))
         raise SystemExit(1)

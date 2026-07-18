@@ -96,7 +96,11 @@ Les chemins relatifs sont résolus depuis le dossier DTLaudit.
 --txt [PATH]         Alias de --text.
 --html [PATH]        Écrire un rapport HTML. Activé par défaut.
 --no-github          Ne pas interroger GitHub avec gh.
+--lang {fr,en}       Choisir la langue de l'interface et des rapports.
 ```
+
+Le français est utilisé par défaut. La langue peut aussi être définie avec la
+variable d'environnement `DTL_LANGUAGE=fr` ou `DTL_LANGUAGE=en`.
 
 `--project` et `--suite` sont exclusifs. L'un des deux est obligatoire en mode
 ligne de commande ; sans argument, le menu console interactif est utilisé.
