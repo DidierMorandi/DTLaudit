@@ -102,6 +102,9 @@ Les chemins relatifs sont résolus depuis le dossier DTLaudit.
 Le français est utilisé par défaut. La langue peut aussi être définie avec la
 variable d'environnement `DTL_LANGUAGE=fr` ou `DTL_LANGUAGE=en`.
 
+Les textes visibles sont centralisés dans `dtlaudit_i18n.py`. Toutes les clés de ce
+catalogue bilingue utilisent le préfixe `txxxx_`.
+
 `--project` et `--suite` sont exclusifs. L'un des deux est obligatoire en mode
 ligne de commande ; sans argument, le menu console interactif est utilisé.
 
@@ -157,12 +160,13 @@ Les artefacts générés comme `build/`, `dist/` et les exécutables peuvent cr�
 
 ## Mise à jour - 16 juillet 2026
 
-Le code courant annonce `v1.1-0` dans `DTLaudit.py`.
+Le code courant annonce `v1.1-6` dans `DTLaudit.py`.
 
 Nouveautés confirmées dans le code :
 
 - L'interface Tkinter a été remplacée par une interface console cohérente avec DTLi18n.
 - Le lancement sans argument affiche un menu permettant d'auditer une suite ou un projet.
+- Le menu interactif affiche `A` pour une suite, `B` pour un projet et `Q` pour quitter. L'invite sous le sous-titre indique `1` pour passer du français à l'anglais et `2` pour revenir au français.
 - La sélection du dossier se fait dans l'Explorateur Windows ; la progression, l'ouverture du rapport et le retour au menu restent pilotés depuis la console.
 - Le rapport HTML est généré par défaut sous le nom `DTLaudit_rapport.html`.
 - Les sorties JSON et texte restent optionnelles via `--json` et `--txt` / `--text`.

@@ -7,3 +7,5 @@
 /DTLaudit_rapport.txt
 *.pyc
 Thumbs.db
+
+/audit_doc.png
